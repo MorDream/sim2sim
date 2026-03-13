@@ -145,7 +145,6 @@ class Go2FieldCfg( Go2RoughCfg ):
         class ranges( Go2RoughCfg.commands.ranges ):
             # lin_vel_x = [0.6, 1.8]
             lin_vel_x = [-1, 3.0]
-            ang_vel_yaw = [-0.8, 0.8]
 
         is_goal_based = True
         class goal_based:
@@ -191,10 +190,12 @@ class Go2FieldCfg( Go2RoughCfg ):
             foot_mirror = 0.0    # 禁用
             foot_slide = 0.0     # 禁用
             stumble = 0.0        # 禁用
+            feet_air_time = 0.0
+            feet_contact_forces = 0.0
 
             leap_bonous_cond = 1.5
 
-        base_height_target = 0.35
+        base_height_target = 0.32
 
 
     class noise( Go2RoughCfg.noise ):
@@ -215,7 +216,7 @@ class Go2FieldCfgPPO( Go2RoughCfgPPO ):
 
         resume = True
         load_run = osp.join(logs_root, "rough_go2",
-            "/root/mym/parkour-main/legged_gym/logs/field_go2/Mar12_09-13-55_Go2_",
+            "/root/mym/parkour-main/legged_gym/logs/field_go2/Mar13_01-49-24_Go2_",
         )
 
         run_name = "".join(["Go2_"])

@@ -18,7 +18,7 @@ go2_const_dof_range = dict(
 
 class Go2RoughCfg( LeggedRobotCfg ):
     class env:
-        num_envs = 4096
+        num_envs = 4096 + 2000
         num_observations = None # No use, use obs_components
         num_privileged_obs = None # No use, use privileged_obs_components
 
@@ -67,7 +67,7 @@ class Go2RoughCfg( LeggedRobotCfg ):
         slope_treshold = 1.
 
         TerrainPerlin_kwargs = dict(
-            zScale= 0.1,
+            zScale= 0.07,
             frequency= 10,
         )
 
@@ -152,7 +152,6 @@ class Go2RoughCfg( LeggedRobotCfg ):
         init_base_rot_range = dict(
             roll= [-0.75, 0.75],
             pitch= [-0.5, 0.5],
-            yaw = [-0.4, 0.4]
         )
         init_base_vel_range = dict(
             x= [-0.2, 1.5],
