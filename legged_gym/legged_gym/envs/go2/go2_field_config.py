@@ -144,7 +144,7 @@ class Go2FieldCfg( Go2RoughCfg ):
         lin_cmd_cutoff = 0.2
         class ranges( Go2RoughCfg.commands.ranges ):
             # lin_vel_x = [0.6, 1.8]
-            lin_vel_x = [-1, 3.0]
+            lin_vel_x = [-1, 2.0]
 
         is_goal_based = True
         class goal_based:
@@ -171,30 +171,55 @@ class Go2FieldCfg( Go2RoughCfg ):
 
     class rewards( Go2RoughCfg.rewards ):
         class scales(Go2RoughCfg.rewards.scales):
-            energy_substeps = -2e-7
-            dof_error_named = -0.1
-            dof_error = -0.005
-            lazy_stop = -1.0
-            # penalty for hardware safety
-            exceed_dof_pos_limits = -0.1
-            exceed_torque_limits_l1norm = -0.1
-            # penetration penalty
-            penetrate_depth = -0.01
+            # ===== 核心目标：通过障碍，而不是单纯平地走稳 =====
+            tracking_lin_vel = 0.0
+            tracking_world_vel = 6.0
+            tracking_ang_vel = 1.0
 
-            hip_pos = 0
-            powers = 0
-            has_contact = 0
+            # ===== 姿态稳定，但不要过度限制跨越动作 =====
+            lin_vel_z = -0.6
+            ang_vel_xy = -0.15
+            orientation = -0.35
+            base_height = -0.10
+            yaw_abs = -0.25
+            lin_pos_y = -0.25
 
-            has_contact = 0
-            stand_still = 0
-            foot_mirror = 0.0    # 禁用
-            foot_slide = 0.0     # 禁用
-            stumble = 0.0        # 禁用
+            # ===== 障碍安全 / 鲁棒性 =====
+            collision = -3.0
+            penetrate_depth = -0.02
+            penetrate_volume = -0.002
+            stumble = -0.20
+            exceed_dof_pos_limits = -0.20
+            exceed_torque_limits_l1norm = -0.12
+            feet_contact_forces = -0.00005
+
+            # ===== 动作质量 / 硬件友好 =====
+            energy_substeps = -5e-7
+            powers = -1e-5
+            action_rate = -0.12
+            action_smoothness = -0.08
+
+            # ===== 姿态先验：非障碍阶段尽量保持接近平地稳定解 =====
+            hip_pos = -1.2
+            dof_error_named = -0.02
+            dof_error = -0.002
+            dof_error_cond = -0.15
+
+            # ===== 障碍特化奖励 =====
+            jump_x_vel_cond = 0.8
+            leap_bonous_cond = 2.5
+            down_cond = 0.10
+            sync_all_legs_cond = -0.20
+
+            # ===== 不再强调平地步态细节 =====
             feet_air_time = 0.0
-            feet_contact_forces = 0.0
+            has_contact = 0.0
+            stand_still = 0.0
+            foot_mirror = 0.0
+            foot_slide = -0.01
+            lazy_stop = 0.0
 
-            leap_bonous_cond = 1.5
-
+        only_positive_rewards = False
         base_height_target = 0.32
 
 
@@ -202,8 +227,10 @@ class Go2FieldCfg( Go2RoughCfg ):
         add_noise = False
 
     class curriculum:
-        penetrate_depth_threshold_harder = 100
-        penetrate_depth_threshold_easier = 200
+        penetrate_volume_threshold_harder = 8000
+        penetrate_volume_threshold_easier = 16000
+        penetrate_depth_threshold_harder = 800
+        penetrate_depth_threshold_easier = 1600
         no_moveup_when_fall = True
 
 logs_root = osp.join(osp.dirname(osp.dirname(osp.dirname(osp.dirname(osp.abspath(__file__))))), "logs")
@@ -216,11 +243,11 @@ class Go2FieldCfgPPO( Go2RoughCfgPPO ):
 
         resume = True
         load_run = osp.join(logs_root, "rough_go2",
-            "/root/mym/parkour-main/legged_gym/logs/field_go2/Mar13_01-49-24_Go2_",
+            "Mar12_06-30-27_Go2Rough",
         )
 
         run_name = "".join(["Go2_"])
 
-        max_iterations = 5000
+        max_iterations = 20000
         save_interval = 1000
         log_interval = 100
