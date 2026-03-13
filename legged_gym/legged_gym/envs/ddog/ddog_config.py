@@ -69,7 +69,7 @@ class Ddog2RoughCfg( LeggedRobotCfg ):
             zScale= 0.07,
             frequency= 10,
         )
-    
+
     class commands( LeggedRobotCfg.commands ):
         heading_command = False
         resampling_time = 10 # [s]
@@ -162,28 +162,42 @@ class Ddog2RoughCfg( LeggedRobotCfg ):
         # )
         init_dof_vel_range = [-5, 5]
 
-        push_robots = True 
+        push_robots = True
         max_push_vel_xy = 0.5 # [m/s]
         push_interval_s = 2
 
     class rewards( LeggedRobotCfg.rewards ):
-        class scales:
+        class scales(LeggedRobotCfg.rewards.scales):
             tracking_lin_vel = 2.
-            tracking_ang_vel = 1
-            energy_substeps = -2e-5
-            stand_still = -2.
-            dof_error_named = -1.
-            dof_error = -0.01
-            # penalty for hardware safety
-            exceed_dof_pos_limits = -0.4
-            exceed_torque_limits_l1norm = -0.4
-            dof_vel_limits = -0.4
-            termination = -2
+            tracking_ang_vel = 1.
+            lin_vel_z = -4
+            ang_vel_xy =  -0.1
+            orientation = -0.2
+            torques = -0.00001
+            dof_vel = -0.
+            dof_acc = -2.5e-7
+            base_height = -1.0
+            feet_air_time = 2.0
+            collision = -1
+            stumble = -0.05
+            stand_still = -1.0
+            action_rate = -0.5
+            action_smoothness = -0.1  # 改为正值，因为函数返回负error
+
+            feet_contact_forces = -0.00015
+            foot_clearance = -0.5
+            foot_mirror = -0.05
+            foot_slide = -0.05
+            has_contact = 1.0
+            hip_pos = -5.0
+            powers = -2e-5
         dof_error_names = ["FL_hip_joint", "FR_hip_joint", "RL_hip_joint", "RR_hip_joint"]
         only_positive_rewards = False
         soft_dof_vel_limit = 0.9
         soft_dof_pos_limit = 0.9
         soft_torque_limit = 0.9
+        clearance_height_target = -0.22
+        base_height_target = 0.32
 
     class normalization( LeggedRobotCfg.normalization ):
         class obs_scales( LeggedRobotCfg.normalization.obs_scales ):
@@ -264,7 +278,7 @@ class Ddog2RoughPPO( LeggedRobotCfgPPO ):
         policy_class_name = "EncoderStateAcRecurrent"
         algorithm_class_name = "EstimatorPPO"
         experiment_name = "rough_ddog"
-        
+
         resume = True
         load_run = "/root/mym/parkour-main/legged_gym/logs/rough_ddog/Feb11_08-00-01_DdogRough_pEnergy-2e-05_pDofErr-1e-02_pDofErrN-1e+00_pStand-2e+00_fromFeb11_00-18-51"
 
