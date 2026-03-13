@@ -67,10 +67,10 @@ class Go2RoughCfg( LeggedRobotCfg ):
         slope_treshold = 1.
 
         TerrainPerlin_kwargs = dict(
-            zScale= 0.00,
+            zScale= 0.1,
             frequency= 10,
         )
-    
+
     class commands( LeggedRobotCfg.commands ):
         heading_command = False
         resampling_time = 5 # [s]
@@ -152,6 +152,7 @@ class Go2RoughCfg( LeggedRobotCfg ):
         init_base_rot_range = dict(
             roll= [-0.75, 0.75],
             pitch= [-0.5, 0.5],
+            yaw = [-0.4, 0.4]
         )
         init_base_vel_range = dict(
             x= [-0.2, 1.5],
@@ -163,7 +164,7 @@ class Go2RoughCfg( LeggedRobotCfg ):
         )
         init_dof_vel_range = [-5, 5]
 
-        push_robots = True 
+        push_robots = True
         max_push_vel_xy = 0.5 # [m/s]
         push_interval_s = 2
 
@@ -184,7 +185,7 @@ class Go2RoughCfg( LeggedRobotCfg ):
             stand_still = -1.0
             action_rate = -0.5
             action_smoothness = -0.1  # 改为正值，因为函数返回负error
-            
+
             feet_contact_forces = -0.00015
             foot_clearance = -0.5
             foot_mirror = -0.05
@@ -279,7 +280,7 @@ class Go2RoughCfgPPO( LeggedRobotCfgPPO ):
         policy_class_name = "EncoderStateAcRecurrent"
         algorithm_class_name = "EstimatorPPO"
         experiment_name = "rough_go2"
-        
+
         resume = True
         load_run = "/root/mym/parkour-main/legged_gym/logs/rough_go2/Mar12_02-25-57_Go2Rough"
 

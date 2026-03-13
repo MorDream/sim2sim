@@ -16,18 +16,25 @@ class Go2FieldCfg( Go2RoughCfg ):
             latency_range = [0.005, 0.045] # [s]
 
     class terrain( Go2RoughCfg.terrain ):
-        num_rows = 10
+        #明确定义，地形分为列cols和行rows，列之间有墙相连，同一列可视为一个赛道，num_rows和num_cols决定了赛道的大小
+        # rows控制一个赛道中障碍（地形）的数量
+        # （num_rows 只影响 difficulty，不影响哪些障碍出现）
+        num_rows = 12
+
         num_cols = 40
         selected = "BarrierTrack"
         slope_treshold = 20.
 
-        max_init_terrain_level = 2
+        max_init_terrain_level = 3
         curriculum = True
-        
+
         pad_unavailable_info = True
+        #地形类型的列表，如果想增大某一种地形的比例，可以重复添加该类型
         BarrierTrack_kwargs = dict(
             options= [
                 "jump",
+                "leap",
+                "leap",
                 "leap",
                 "hurdle",
                 "down",
@@ -44,7 +51,7 @@ class Go2FieldCfg( Go2RoughCfg ):
                 # fake_offset= 0.1,
             ),
             leap= dict(
-                length= [0.05, 1.5],
+                length= [0.2, 1.5],
                 depth= [0.5, 0.8],
                 height= 0.2, # expected leap height over the gap
                 # fake_offset= 0.1,
@@ -127,7 +134,7 @@ class Go2FieldCfg( Go2RoughCfg ):
             engaging_finish_threshold= 0.,
             curriculum_perlin= False,
             no_perlin_threshold= 0.1,
-            randomize_obstacle_order= True,
+            randomize_obstacle_order= True,#随机抽取障碍
             n_obstacles_per_track= 1,
         )
 
@@ -137,8 +144,9 @@ class Go2FieldCfg( Go2RoughCfg ):
         lin_cmd_cutoff = 0.2
         class ranges( Go2RoughCfg.commands.ranges ):
             # lin_vel_x = [0.6, 1.8]
-            lin_vel_x = [-0.6, 2.0]
-        
+            lin_vel_x = [-1, 3.0]
+            ang_vel_yaw = [-0.8, 0.8]
+
         is_goal_based = True
         class goal_based:
             # the ratios are related to the goal position in robot frame
@@ -173,19 +181,21 @@ class Go2FieldCfg( Go2RoughCfg ):
             exceed_torque_limits_l1norm = -0.1
             # penetration penalty
             penetrate_depth = -0.01
-            
+
             hip_pos = 0
             powers = 0
             has_contact = 0
-            
+
             has_contact = 0
             stand_still = 0
             foot_mirror = 0.0    # 禁用
             foot_slide = 0.0     # 禁用
             stumble = 0.0        # 禁用
-            
+
+            leap_bonous_cond = 1.5
+
         base_height_target = 0.35
-            
+
 
     class noise( Go2RoughCfg.noise ):
         add_noise = False
@@ -194,7 +204,7 @@ class Go2FieldCfg( Go2RoughCfg ):
         penetrate_depth_threshold_harder = 100
         penetrate_depth_threshold_easier = 200
         no_moveup_when_fall = True
-    
+
 logs_root = osp.join(osp.dirname(osp.dirname(osp.dirname(osp.dirname(osp.abspath(__file__))))), "logs")
 class Go2FieldCfgPPO( Go2RoughCfgPPO ):
     class algorithm( Go2RoughCfgPPO.algorithm ):
@@ -205,12 +215,11 @@ class Go2FieldCfgPPO( Go2RoughCfgPPO ):
 
         resume = True
         load_run = osp.join(logs_root, "rough_go2",
-            "/root/mym/parkour-main/legged_gym/logs/rough_go2/Mar12_06-30-27_Go2Rough",
+            "/root/mym/parkour-main/legged_gym/logs/field_go2/Mar12_09-13-55_Go2_",
         )
 
         run_name = "".join(["Go2_"])
 
-        max_iterations = 10000
+        max_iterations = 5000
         save_interval = 1000
         log_interval = 100
-        
