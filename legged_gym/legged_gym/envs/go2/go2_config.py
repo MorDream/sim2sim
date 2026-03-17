@@ -151,7 +151,7 @@ class Go2RoughCfg( LeggedRobotCfg ):
         )
         init_base_rot_range = dict(
             roll= [-0.75, 0.75],
-            pitch= [-0.5, 0.5],
+            pitch= [-0.75, 0.75],
         )
         init_base_vel_range = dict(
             x= [-0.2, 1.5],

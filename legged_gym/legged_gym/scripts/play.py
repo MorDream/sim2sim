@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2021 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #
@@ -130,11 +130,21 @@ def play(args):
     env_cfg.viewer.draw_height_measurements = False
     env_cfg.viewer.draw_volume_sample_points = False
     env_cfg.viewer.draw_sensors = False
+
+    #=======================add=======================
+    # override some parameters for testing
+    if env_cfg.terrain.selected == "BarrierTrack":
+        env_cfg.env.num_envs = min(env_cfg.env.num_envs, 1)
+    env_cfg.commands.is_goal_based = False   # ← 加这一行，play 时手动控制指令
+    #=======================add=======================
+
+
+
     if hasattr(env_cfg.terrain, "BarrierTrack_kwargs"):
         env_cfg.terrain.BarrierTrack_kwargs["draw_virtual_terrain"] = True
     train_cfg.runner.resume = (args.load_run is not None)
     train_cfg.runner_class_name = "OnPolicyRunner"
-    
+
     if args.no_throw:
         env_cfg.init_state.pos[2] = 0.4
         env_cfg.domain_rand.init_base_pos_range["x"] = [0.4, 0.4]
@@ -201,7 +211,7 @@ def play(args):
         policy = agent_model.act
     ### get obs_slice to read the obs
     # obs_slice = get_obs_slice(env.obs_segments, "engaging_block")
-    
+
     # export policy as a jit module (used to run it from C++)
     if EXPORT_POLICY:
         path = os.path.join(LEGGED_GYM_ROOT_DIR, 'logs', train_cfg.runner.experiment_name, 'exported', 'policies')
@@ -410,7 +420,7 @@ def play(args):
             # exceed_idxs = torch.where(abs(env.substep_torques[robot_index]) > 35.)
             # print("substep_torques:", exceed_idxs[1], env.substep_torques[robot_index][exceed_idxs[0], exceed_idxs[1]])
         # if env.torque_exceed_count_envstep[robot_index].any():
-        #     print("substep torque exceed limit ratio", 
+        #     print("substep torque exceed limit ratio",
         #         (torch.abs(env.substep_torques[robot_index]) / (env.torque_limits.unsqueeze(0))).max(),
         #         "joint index",
         #         torch.where((torch.abs(env.substep_torques[robot_index]) > env.torque_limits.unsqueeze(0) * env.cfg.rewards.soft_torque_limit).any(dim= 0))[0],
@@ -479,7 +489,7 @@ def play(args):
                     logger.log_rewards(infos["episode"], num_episodes)
         elif i==stop_rew_log:
             logger.print_rewards()
-        
+
         if dones.any():
             agent_model.reset(dones)
             if env.time_out_buf[dones].any():
@@ -488,7 +498,7 @@ def play(args):
                 print("env dones because of failure")
             # print(infos)
         if i % 100 == 0:
-            print("frame_rate:" , 100/(time.time_ns() - start_time) * 1e9, 
+            print("frame_rate:" , 100/(time.time_ns() - start_time) * 1e9,
                   "command_x:", env.commands[robot_index, 0],
             )
             start_time = time.time_ns()

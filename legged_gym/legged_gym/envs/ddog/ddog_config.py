@@ -81,7 +81,7 @@ class Ddog2RoughCfg( LeggedRobotCfg ):
             ang_vel_yaw = [-2., 2.]
 
     class init_state( LeggedRobotCfg.init_state ):
-        pos = [0., 0., 0.3] # [m]
+        pos = [0., 0., 0.5] # [m]
         default_joint_angles = { # 12 joints in the order of simulation
             "FL_hip_joint": 0.1,
             "FL_thigh_joint": 0.95,
@@ -191,6 +191,7 @@ class Ddog2RoughCfg( LeggedRobotCfg ):
             has_contact = 1.0
             hip_pos = -5.0
             powers = -2e-5
+        
         dof_error_names = ["FL_hip_joint", "FR_hip_joint", "RL_hip_joint", "RR_hip_joint"]
         only_positive_rewards = False
         soft_dof_vel_limit = 0.9
@@ -282,13 +283,7 @@ class Ddog2RoughPPO( LeggedRobotCfgPPO ):
         resume = True
         load_run = "/root/mym/parkour-main/legged_gym/logs/rough_ddog/Feb11_08-00-01_DdogRough_pEnergy-2e-05_pDofErr-1e-02_pDofErrN-1e+00_pStand-2e+00_fromFeb11_00-18-51"
 
-        run_name = "".join(["DdogRough",
-            ("_pEnergy" + np.format_float_scientific(Ddog2RoughCfg.rewards.scales.energy_substeps, precision= 1, trim= "-") if Ddog2RoughCfg.rewards.scales.energy_substeps != 0 else ""),
-            ("_pDofErr" + np.format_float_scientific(Ddog2RoughCfg.rewards.scales.dof_error, precision= 1, trim= "-") if Ddog2RoughCfg.rewards.scales.dof_error != 0 else ""),
-            ("_pDofErrN" + np.format_float_scientific(Ddog2RoughCfg.rewards.scales.dof_error_named, precision= 1, trim= "-") if Ddog2RoughCfg.rewards.scales.dof_error_named != 0 else ""),
-            ("_pStand" + np.format_float_scientific(Ddog2RoughCfg.rewards.scales.stand_still, precision= 1, trim= "-") if Ddog2RoughCfg.rewards.scales.stand_still != 0 else ""),
-            ("_noResume" if not resume else "_from" + "_".join(load_run.split("/")[-1].split("_")[:2])),
-        ])
+        run_name = "".join(["DdogRough"])
 
         max_iterations = 1000
         save_interval = 200

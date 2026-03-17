@@ -37,6 +37,8 @@ class Go2FieldCfg( Go2RoughCfg ):
                 "discrete_rect",
                 "slope",
                 "wave",
+                "leap",
+                "leap",
             ], # each race track will permute all the options
             jump= dict(
                 height= [0.05, 0.5],
@@ -169,7 +171,7 @@ class Go2FieldCfg( Go2RoughCfg ):
             energy_substeps = -2e-7
             torques = -1e-7
             stand_still = -1.
-            dof_error_named = -1.
+            dof_error_named = -2.
             dof_error = -0.005
             collision = -0.05
             lazy_stop = -1.
@@ -178,6 +180,17 @@ class Go2FieldCfg( Go2RoughCfg ):
             exceed_torque_limits_l1norm = -0.1
             # penetration penalty
             penetrate_depth = -0.05
+            #add
+            termination = -1
+            leap_bonous_cond = 2
+            powers = -1e-7
+            
+            jump_x_vel_cond = 0.5 #这个奖励函数是为了鼓励机器人在跳跃障碍时，具有一定的前进速度并且有一个适当的俯仰角（pitch）。
+            sync_legs_cond = 0.5#跳跃时，强制机器人前后腿同步运动
+            dof_error_cond = -1#惩罚机器人在未接触障碍物时的关节误差
+            
+            action_rate = -0.1 # 惩罚动作变化率过大
+            action_smoothness = -0.01
 
     class noise( Go2RoughCfg.noise ):
         add_noise = False
@@ -196,14 +209,14 @@ class Go2FieldCfgPPO( Go2RoughCfgPPO ):
         experiment_name = "field_go2"
 
         resume = True
-        load_run = osp.join(logs_root, "rough_go2",
-            "Mar12_06-30-27_Go2Rough",
+        load_run = osp.join(logs_root, "field_go2",
+            "Mar16_09-43-48_Go2_12skills",
         )
 
         run_name = "".join(["Go2_",
             ("{:d}skills".format(len(Go2FieldCfg.terrain.BarrierTrack_kwargs["options"])))
         ])
 
-        max_iterations = 10000
+        max_iterations = 5000
         save_interval = 1000
         log_interval = 100
