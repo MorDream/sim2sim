@@ -264,6 +264,7 @@ class MujocoSim2SimEvalJit:
             self.cfg = yaml.load(f, Loader=yaml.FullLoader)
 
         self.policy_path = policy_path or resolve_config_path(self.cfg["policy_path"], self.config_dir)
+        print(f"[Info] Using policy from: {self.policy_path}")
         self.xml_path = xml_path or resolve_config_path(self.cfg["xml_path"], self.config_dir)
         self.simulation_duration = float(
             simulation_duration if simulation_duration is not None else self.cfg.get("simulation_duration", 60.0)
@@ -466,6 +467,82 @@ class MujocoSim2SimEvalJit:
            base_quat = self._get_base_quat()
            return self.height_sampler.get_height_observation(base_pos, base_quat).astype(np.float32)
 
+    def _visualize_height_points(self, viewer) -> None:
+        """Visualize terrain height measurements around the robot with color coding:
+        - Green: terrain higher than flat ground (z=0)
+        - Gray: flat ground (z=0)
+        - Red: terrain lower than flat ground (z=0)
+        Filters out robot body collisions by checking ray intersection from above.
+        """
+        if not hasattr(viewer, 'user_scn'):
+            return
+        
+        # Get height observation (normalized)
+        height_obs = self._get_height_measurements()
+        
+        # Get base position for reference
+        base_pos = self._get_base_pos()
+        base_quat = self._get_base_quat()
+        
+        # Get world positions of sampling points
+        yaw = quat_to_yaw(base_quat)
+        c, s = math.cos(yaw), math.sin(yaw)
+        yaw_rot = np.array([[c, -s], [s, c]], dtype=np.float64)
+        
+        world_xy = self.height_sampler.local_points_xy @ yaw_rot.T
+        world_xy[:, 0] += float(base_pos[0])
+        world_xy[:, 1] += float(base_pos[1])
+        
+        # Calculate actual terrain heights from observation
+        # height_obs = clip(base_z + offset - measured_height, -1, 1) * scale
+        # So: measured_height = base_z + offset - (height_obs / scale)
+        measured_heights = base_pos[2] + self.height_offset - (height_obs / self.height_scale)
+        
+        # Add visualization markers
+        max_markers = min(len(measured_heights), 231)
+        viewer.user_scn.ngeom = 0
+        
+        for i in range(max_markers):
+            terrain_z = measured_heights[i]
+            pos_xy = world_xy[i]
+            
+            # Filter out robot body: check if point is too close to robot parts
+            # Skip if this point likely hit the robot body (not terrain)
+            # Detect by checking if the point is within robot body bounding volume
+            # Simple heuristic: if point is close to base z and within robot body radius
+            dx = pos_xy[0] - base_pos[0]
+            dy = pos_xy[1] - base_pos[1]
+            dist_from_base = math.sqrt(dx*dx + dy*dy)
+            
+            # Skip points that are likely on robot body (close to base horizontally and vertically)
+            # Robot body approx radius ~0.3m, height around base
+            if dist_from_base < 0.35 and abs(terrain_z - base_pos[2]) < 0.2:
+                continue
+            
+            # Compare to flat ground (z=0)
+            height_diff = terrain_z
+            
+            # Determine color based on height relative to flat ground
+            if height_diff > 0.05:  # Higher than flat ground
+                rgba = [0.0, 0.8, 0.0, 0.8]  # Green
+            elif height_diff < -0.05:  # Lower than flat ground
+                rgba = [0.8, 0.0, 0.0, 0.8]  # Red
+            else:  # Flat ground
+                rgba = [0.5, 0.5, 0.5, 0.6]  # Gray
+            
+            pos = np.array([pos_xy[0], pos_xy[1], terrain_z], dtype=np.float64)
+            
+            idx = viewer.user_scn.ngeom
+            mujoco.mjv_initGeom(
+                viewer.user_scn.geoms[idx],
+                type=mujoco.mjtGeom.mjGEOM_SPHERE,
+                size=[0.02, 0, 0],
+                pos=pos,
+                mat=np.eye(3).flatten(),
+                rgba=rgba,
+            )
+            viewer.user_scn.ngeom += 1
+
     def _get_obs_component(self, name: str) -> np.ndarray:
            getter = getattr(self, f"_get_{name}", None)
            if getter is None:
@@ -584,6 +661,9 @@ class MujocoSim2SimEvalJit:
                     frame = self.renderer.render()
                     writer.append_data(frame)
 
+                # Visualize terrain height points
+                self._visualize_height_points(viewer)
+                
                 viewer.sync()
 
                 sleep_time = self.mj_model.opt.timestep - (time.time() - step_wall_time)

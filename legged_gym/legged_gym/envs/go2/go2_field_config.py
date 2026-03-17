@@ -26,20 +26,23 @@ class Go2FieldCfg( Go2RoughCfg ):
 
         pad_unavailable_info = True
         BarrierTrack_kwargs = dict(
+            # options= [
+            #     "jump",
+            #     "leap",
+            #     "hurdle",
+            #     "down",
+            #     "tilted_ramp",
+            #     "stairsup",
+            #     "stairsdown",
+            #     "discrete_rect",
+            #     "slope",
+            #     "wave",
+            # ], # each race track will permute all the options
             options= [
-                "jump",
-                "leap",
-                "hurdle",
-                "down",
-                "tilted_ramp",
-                "stairsup",
-                "stairsdown",
-                "discrete_rect",
-                "slope",
-                "wave",
-                "leap",
-                "leap",
-            ], # each race track will permute all the options
+                 "leap",
+                 "crawl",
+                 "tilt"
+            ],
             jump= dict(
                 height= [0.05, 0.5],
                 depth= [0.1, 0.3],
@@ -170,7 +173,7 @@ class Go2FieldCfg( Go2RoughCfg ):
             tracking_ang_vel = 1.
             energy_substeps = -2e-7
             torques = -1e-7
-            stand_still = -1.
+            stand_still = -2.
             dof_error_named = -2.
             dof_error = -0.005
             collision = -0.05
@@ -181,7 +184,6 @@ class Go2FieldCfg( Go2RoughCfg ):
             # penetration penalty
             penetrate_depth = -0.05
             #add
-            termination = -1
             leap_bonous_cond = 2
             powers = -1e-7
             
@@ -191,6 +193,7 @@ class Go2FieldCfg( Go2RoughCfg ):
             
             action_rate = -0.1 # 惩罚动作变化率过大
             action_smoothness = -0.01
+            feet_air_time = 0.5 # 奖励足部离地时间，鼓励跳跃动作
 
     class noise( Go2RoughCfg.noise ):
         add_noise = False
@@ -210,7 +213,7 @@ class Go2FieldCfgPPO( Go2RoughCfgPPO ):
 
         resume = True
         load_run = osp.join(logs_root, "field_go2",
-            "Mar16_09-43-48_Go2_12skills",
+            "Mar17_02-10-07_Go2_12skills",
         )
 
         run_name = "".join(["Go2_",
