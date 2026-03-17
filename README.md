@@ -3,7 +3,7 @@ To run sim2sim for mujoco:
   move your policy file to `deploy/deploy_mujoco/exported/policies/` and update the `policy_path` in `g2.yaml`
   ```
   cd deploy/deploy_mujoco
-  python mujoco_test.py
+  python deploy_mujoco.py
   ```
 
 

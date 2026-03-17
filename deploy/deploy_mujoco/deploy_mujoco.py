@@ -1,284 +1,629 @@
+from __future__ import annotations
 
+import argparse
+import math
 import time
-import mujoco.viewer
+from pathlib import Path
+from typing import Any, Optional
+
 import mujoco
+import mujoco.viewer
 import numpy as np
 import torch
 import yaml
-import os
 
-# 假设 LEGGED_GYM_ROOT_DIR 已定义，或者手动指定
-LEGGED_GYM_ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    import imageio.v2 as imageio
+except Exception:
+    imageio = None
 
-class MujocoTerrainSensor:
-    def __init__(self, model, data, num_points_x=21, num_points_y=11, spacing=0.1):
-        """
-        参数:
-            model: mujoco.MjModel
-            data: mujoco.MjData
-            num_points_x/y: 采样点阵规模 (11x11=121个点)
-            spacing: 点与点之间的间距 (米)
-        """
+try:
+    import pygame
+except Exception:
+    pygame = None
+
+
+CURRENT_FILE = Path(__file__).resolve()
+LEGGED_GYM_ROOT_DIR = CURRENT_FILE.parents[2]
+DEFAULT_CONFIG_PATH = LEGGED_GYM_ROOT_DIR / "deploy" / "deploy_mujoco" / "configs" / "g2.yaml"
+
+GO2_OBS_COMPONENTS = [
+    "lin_vel",
+    "ang_vel",
+    "projected_gravity",
+    "commands",
+    "dof_pos",
+    "dof_vel",
+    "last_actions",
+    "height_measurements",
+]
+
+GO2_MEASURED_POINTS_X = [float(x) for x in np.arange(-0.5, 1.51, 0.1)]
+GO2_MEASURED_POINTS_Y = [float(y) for y in np.arange(-0.5, 0.51, 0.1)]
+GO2_HEIGHT_MEASUREMENTS_OFFSET = -0.2
+GO2_NUM_ACTIONS = 12
+GO2_NUM_HEIGHT_POINTS = len(GO2_MEASURED_POINTS_X) * len(GO2_MEASURED_POINTS_Y)
+GO2_NUM_OBS = 48 + GO2_NUM_HEIGHT_POINTS
+GO2_MUJOCO_JOINT_NAMES = [
+    "FL_hip_joint",
+    "FL_thigh_joint",
+    "FL_calf_joint",
+    "FR_hip_joint",
+    "FR_thigh_joint",
+    "FR_calf_joint",
+    "RL_hip_joint",
+    "RL_thigh_joint",
+    "RL_calf_joint",
+    "RR_hip_joint",
+    "RR_thigh_joint",
+    "RR_calf_joint",
+]
+
+
+def resolve_config_path(path_str: str, config_dir: Path) -> Path:
+    path_str = path_str.replace("{LEGGED_GYM_ROOT_DIR}", str(LEGGED_GYM_ROOT_DIR))
+    candidate = Path(path_str)
+    if candidate.is_absolute():
+        return candidate
+    config_relative = (config_dir / candidate).resolve()
+    if config_relative.exists():
+        return config_relative
+    return (LEGGED_GYM_ROOT_DIR / candidate).resolve()
+
+
+def quat_rotate_inverse(quat_wxyz: np.ndarray, vec: np.ndarray) -> np.ndarray:
+    quat_wxyz = np.asarray(quat_wxyz, dtype=np.float64)
+    vec = np.asarray(vec, dtype=np.float64)
+    q_w = quat_wxyz[0]
+    q_vec = quat_wxyz[1:]
+    a = vec * (2.0 * q_w * q_w - 1.0)
+    b = np.cross(q_vec, vec) * (2.0 * q_w)
+    c = q_vec * (2.0 * np.dot(q_vec, vec))
+    return (a - b + c).astype(np.float32)
+
+
+def quat_to_yaw(quat_wxyz: np.ndarray) -> float:
+    w, x, y, z = [float(v) for v in quat_wxyz]
+    siny_cosp = 2.0 * (w * z + x * y)
+    cosy_cosp = 1.0 - 2.0 * (y * y + z * z)
+    return math.atan2(siny_cosp, cosy_cosp)
+
+
+def pd_control(
+    target_q: np.ndarray,
+    q: np.ndarray,
+    kp: np.ndarray,
+    target_dq: np.ndarray,
+    dq: np.ndarray,
+    kd: np.ndarray,
+) -> np.ndarray:
+    return (target_q - q) * kp + (target_dq - dq) * kd
+
+
+def extract_action_tensor(policy_output: Any) -> torch.Tensor:
+    if torch.is_tensor(policy_output):
+        return policy_output
+
+    if isinstance(policy_output, (tuple, list)):
+        for item in policy_output:
+            try:
+                return extract_action_tensor(item)
+            except TypeError:
+                continue
+
+    if isinstance(policy_output, dict):
+        for key in ("actions", "action", "mu", "mean"):
+            if key in policy_output:
+                return extract_action_tensor(policy_output[key])
+        for value in policy_output.values():
+            try:
+                return extract_action_tensor(value)
+            except TypeError:
+                continue
+
+    raise TypeError(f"Unsupported policy output type: {type(policy_output)}")
+
+
+def try_init_joystick(enable_joystick: bool):
+    if not enable_joystick:
+        return None
+    if pygame is None:
+        print("[Info] pygame not available, fallback to fixed command.")
+        return None
+
+    pygame.init()
+    pygame.joystick.init()
+    if pygame.joystick.get_count() <= 0:
+        print("[Info] No joystick detected, fallback to fixed command.")
+        return None
+
+    joystick = pygame.joystick.Joystick(0)
+    joystick.init()
+    print(f"[Info] Joystick connected: {joystick.get_name()}")
+    return joystick
+
+
+def read_xbox_command(joystick, max_cmd: np.ndarray) -> np.ndarray:
+    pygame.event.pump()
+    dead_zone = 0.10
+    lx = joystick.get_axis(0)
+    ly = joystick.get_axis(1)
+    rx = joystick.get_axis(3)
+
+    if abs(lx) < dead_zone:
+        lx = 0.0
+    if abs(ly) < dead_zone:
+        ly = 0.0
+    if abs(rx) < dead_zone:
+        rx = 0.0
+
+    cmd_x = -ly * max_cmd[0]
+    cmd_y = -lx * max_cmd[1]
+    cmd_yaw = -rx * max_cmd[2]
+    return np.array([cmd_x, cmd_y, cmd_yaw], dtype=np.float32)
+
+
+class HeightMeasurementSampler:
+    """
+    Approximate legged_gym height measurements in MuJoCo:
+    1. rotate local sampling grid by base yaw
+    2. cast downward rays
+    3. use clip(base_z + offset - measured_heights, -1, 1) * scale
+    """
+
+    def __init__(
+        self,
+        model: mujoco.MjModel,
+        data: mujoco.MjData,
+        base_body_id: int,
+        points_x,
+        points_y,
+        height_offset: float,
+        height_scale: float,
+        ray_start_height: float = 1.0,
+    ) -> None:
         self.model = model
         self.data = data
+        self.base_body_id = int(base_body_id)
+        self.height_offset = float(height_offset)
+        self.height_scale = float(height_scale)
+        self.ray_start_height = float(ray_start_height)
 
-        # 1. 预定义相对坐标网格 (以机器人为中心的局部坐标)
-        x = np.linspace(-(num_points_x-1)*spacing/2, (num_points_x-1)*spacing/2, num_points_x)
-        y = np.linspace(-(num_points_y-1)*spacing/2, (num_points_y-1)*spacing/2, num_points_y)
-        xv, yv = np.meshgrid(x, y)
+        grid_x, grid_y = np.meshgrid(
+            np.asarray(points_x, dtype=np.float64),
+            np.asarray(points_y, dtype=np.float64),
+            indexing="ij",
+        )
+        self.local_points_xy = np.stack(
+            [grid_x.reshape(-1), grid_y.reshape(-1)],
+            axis=-1,
+        )
+        self.num_points = self.local_points_xy.shape[0]
 
-        # 存储为 (N, 3) 矢量，初始 Z 设为 0
-        self.points_local = np.stack([xv.flatten(), yv.flatten(), np.zeros_like(xv.flatten())], axis=-1)
-        self.num_points = self.points_local.shape[0]
+    def sample_heights(self, base_pos: np.ndarray, base_quat_wxyz: np.ndarray) -> np.ndarray:
+        yaw = quat_to_yaw(base_quat_wxyz)
+        c = math.cos(yaw)
+        s = math.sin(yaw)
+        yaw_rot = np.array([[c, -s], [s, c]], dtype=np.float64)
 
-        # 2. 设置碰撞过滤掩码 (Geom Group Mask)
-        # 掩码数组长度为 5，对应 MuJoCo 的 5 个 geom groups
-        # [Group0, Group1, Group2, Group3, Group4]
-        # 我们只开启 Group 0 (地形)，关闭 Group 1 (机器人)
-        self.terrain_mask = np.array([0, 1, 0, 0, 0, 0], dtype=np.uint8)
+        world_xy = self.local_points_xy @ yaw_rot.T
+        world_xy[:, 0] += float(base_pos[0])
+        world_xy[:, 1] += float(base_pos[1])
 
-        # 3. 归一化偏移量 (对应 legged_gym 的 height_measurements_offset)
-        self.height_offset = -0.2
-        self.x_range = x
-        self.y_range = y
-        self.points_local = np.stack([xv.flatten(), yv.flatten(), np.zeros_like(xv.flatten())], axis=-1)
+        ray_dir = np.array([0.0, 0.0, -1.0], dtype=np.float64)
+        geomid = np.array([-1], dtype=np.int32)
+        heights = np.empty(self.num_points, dtype=np.float32)
 
-    def get_heights(self, robot_pos, robot_quat):
-        """
-        获取机器人周围地形的绝对物理高度
-        """
-        # 将四元数转换为偏航角 (Yaw)，确保采样点随机器人转动
-        # 这里简化处理，只提取偏航角
-        from scipy.spatial.transform import Rotation as R
-        r = R.from_quat([robot_quat[1], robot_quat[2], robot_quat[3], robot_quat[0]]) # MuJoCo是[w,x,y,z]
-        yaw = r.as_euler('zyx')[0]
-
-        cos_y = np.cos(yaw)
-        sin_y = np.sin(yaw)
-        R_yaw = np.array([[cos_y, -sin_y, 0],
-                          [sin_y,  cos_y, 0],
-                          [0,      0,     1]])
-
-        # 将局部采样点转换到世界坐标系
-        # 射线起点设在机器人位置上方 1.0m，确保能覆盖到高处地形
-        points_world = (R_yaw @ self.points_local.T).T + robot_pos + np.array([0, 0, 1.0])
-
-        heights = np.zeros(self.num_points)
-        direction = np.array([0, 0, -1.0]) # 垂直向下发射
-        geomid_out = np.zeros(1, dtype=np.int32)
-        # 核心：使用 mj_ray 进行射线探测
         for i in range(self.num_points):
-            # geomgroup=self.terrain_mask 确保射线忽略机器人本体（Group 1）
-            dist = mujoco.mj_ray(self.model, self.data, points_world[i], direction,
-                                 geomgroup=self.terrain_mask,
-                                 flg_static=1, # 仅检测静态几何体（可选）
-                                 bodyexclude=-1,
-                                 geomid=geomid_out)
-
-            if dist > 0:
-                # 实际高度 = 射线起点 Z - 飞行距离
-                heights[i] = points_world[i][2] - dist
+            ray_start = np.array(
+                [
+                    world_xy[i, 0],
+                    world_xy[i, 1],
+                    float(base_pos[2]) + self.ray_start_height,
+                ],
+                dtype=np.float64,
+            )
+            dist = mujoco.mj_ray(
+                self.model,
+                self.data,
+                ray_start,
+                ray_dir,
+                None,
+                1,
+                self.base_body_id,
+                geomid,
+            )
+            if np.isfinite(dist) and dist >= 0.0:
+                heights[i] = float(ray_start[2] - dist)
             else:
-                # 没打中地形（可能出界或坑极深）
-                heights[i] = -10.0
+                heights[i] = float(base_pos[2] - 10.0)
 
         return heights
 
-    def get_observation(self):
-        """
-        生成最终输入给神经网络的观测向量 (Obs)
-        """
-        # 获取机器人当前状态
-        # 假设机器人 root body 名为 "base"
-        base_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "base")
-        robot_pos = self.data.xpos[base_id]
-        robot_quat = self.data.xquat[base_id]
-
-        # 获取物理高度
-        measured_heights = self.get_heights(robot_pos, robot_quat)
-
-        # 转化为相对高度并归一化 (核心逻辑)
-        # Obs = Clip( Base_Z + Offset - Measured_Heights, -1, 1 )
-        heights_obs = robot_pos[2] + self.height_offset - measured_heights
-        heights_obs = np.clip(heights_obs, -1.0, 1.0)
-
-        return torch.from_numpy(heights_obs).float()
-
-class ObservationSensor:
-    def __init__(self, model, data, config, actions):
-        self.model = model
-        self.data = data
-        self.terrain_sensor = MujocoTerrainSensor(model, data)
-        self.config = config
-        self.quat = d.qpos[3:7].copy()
-        self.inv_quat = np.zeros(4)
-        mujoco.mju_negQuat(self.inv_quat, self.quat)
-        self.default_angles = np.array(self.config["default_angles"], dtype=np.float32)
-        self.actions = actions
-        self.obs_list = config["obs_list"]
-
-    def _get_height_measurements(self):
-        heights = self.terrain_sensor.get_observation()
-        height = torch.tensor(heights, dtype=torch.float32).clip(-1, 1)
-        return height
-    def _get_lin_vel(self):
-        local_lin_vel = np.zeros(3)
-        mujoco.mju_rotVecQuat(local_lin_vel, self.data.qvel[:3], self.inv_quat)
-        if self.config["set_lin_zero"]:
-            local_lin_vel = np.zeros(3)
-        return local_lin_vel * self.config.get("lin_vel_scale", 2.0)
-    def _get_ang_vel(self):
-        return self.data.qvel[3:6] * self.config.get("ang_vel_scale", 0.25)
-
-    def _get_projected_gravity(self):
-        world_gravity = np.array([0, 0, -1], dtype=np.float64)
-        local_gravity = np.zeros(3)
-        mujoco.mju_rotVecQuat(local_gravity, world_gravity, self.inv_quat)
-        return local_gravity * self.config.get("gravity_scale", 1.0)
-
-    def _get_commands(self):
-        return np.array(self.config["cmd_init"]) * np.array(self.config["cmd_scale"])
-
-    def _get_dof_pos(self):
-        return (self.data.qpos[7:] - self.default_angles) * self.config.get("dof_pos_scale", 1.0)
-
-    def _get_dof_vel(self):
-        return self.data.qvel[6:] * self.config.get("dof_vel_scale", 0.05)
-
-    def _get_last_actions(self):
-        return self.actions * self.config.get("action_scale", 1.0)
-
-    def get_observations(self):
-        obs = []
-        for ob in self.obs_list:
-            obs.append(getattr(self, "_get_" + ob)())
-        obs = np.concatenate(obs)
-        return obs
+    def get_height_observation(self, base_pos: np.ndarray, base_quat_wxyz: np.ndarray) -> np.ndarray:
+        measured_heights = self.sample_heights(base_pos, base_quat_wxyz)
+        heights = np.clip(base_pos[2] + self.height_offset - measured_heights, -1.0, 1.0)
+        heights = heights * self.height_scale
+        return heights.astype(np.float32)
 
 
-# --- 2. 部署主程序 ---
+class MujocoSim2SimEvalJit:
+    def __init__(
+        self,
+        config_path: Path,
+        policy_path: Optional[Path] = None,
+        xml_path: Optional[Path] = None,
+        simulation_duration: Optional[float] = None,
+        save_video: bool = False,
+        video_path: Optional[Path] = None,
+    ) -> None:
+        self.config_path = config_path.resolve()
+        self.config_dir = self.config_path.parent
 
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("config_file", type=str)
-    args = parser.parse_args()
+        with open(self.config_path, "r", encoding="utf-8") as f:
+            self.cfg = yaml.load(f, Loader=yaml.FullLoader)
 
-    # 加载配置
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(current_dir, "configs", args.config_file)
-    with open(config_path, "r") as f:
-        config = yaml.load(f, Loader=yaml.FullLoader)
+        self.policy_path = policy_path or resolve_config_path(self.cfg["policy_path"], self.config_dir)
+        self.xml_path = xml_path or resolve_config_path(self.cfg["xml_path"], self.config_dir)
+        self.simulation_duration = float(
+            simulation_duration if simulation_duration is not None else self.cfg.get("simulation_duration", 60.0)
+        )
 
-    policy_path = config["policy_path"].replace("{LEGGED_GYM_ROOT_DIR}", LEGGED_GYM_ROOT_DIR)
-    xml_path = config["xml_path"].replace("{LEGGED_GYM_ROOT_DIR}", LEGGED_GYM_ROOT_DIR)
+        self.simulation_dt = float(self.cfg.get("simulation_dt", 0.005))
+        self.control_decimation = int(self.cfg.get("control_decimation", 4))
 
-    # 初始化 MuJoCo
-    m = mujoco.MjModel.from_xml_path(xml_path)
-    d = mujoco.MjData(m)
-    m.opt.timestep = config["simulation_dt"]
+        self.kps = np.asarray(self.cfg["kps"], dtype=np.float32)
+        self.kds = np.asarray(self.cfg["kds"], dtype=np.float32)
+        self.default_angles_mj = np.asarray(self.cfg["default_angles"], dtype=np.float32)
 
-    # 加载模型
-    device = "cuda"
-    policy = torch.jit.load(policy_path).to(device)
-    policy.eval()
+        self.lin_vel_scale = float(self.cfg.get("lin_vel_scale", 1.0))
+        self.ang_vel_scale = float(self.cfg.get("ang_vel_scale", 1.0))
+        self.dof_pos_scale = float(self.cfg.get("dof_pos_scale", 1.0))
+        self.dof_vel_scale = float(self.cfg.get("dof_vel_scale", 1.0))
+        self.action_scale = float(self.cfg.get("action_scale", 1.0))
+        self.cmd_scale = np.asarray(self.cfg.get("cmd_scale", [1.0, 1.0, 1.0]), dtype=np.float32)
+        self.max_cmd = np.asarray(self.cfg.get("max_cmd", [2.0, 1.0, 2.5]), dtype=np.float32)
+        self.cmd = np.asarray(self.cfg.get("cmd_init", [0.5, 0.0, 0.0]), dtype=np.float32)
 
-    # 地形采样点
-    measured_points_x = np.linspace(-0.5, 1.5, 21)
-    measured_points_y = np.linspace(-0.5, 0.5, 11)
+        self.use_lin_vel = bool(self.cfg.get("use_lin_vel", True))
+        if bool(self.cfg.get("set_lin_zero", False)):
+            self.use_lin_vel = False
 
-    # 控制参数
-    kps = np.array(config["kps"], dtype=np.float32)
-    kds = np.array(config["kds"], dtype=np.float32)
-    default_angles = np.array(config["default_angles"], dtype=np.float32)
+        self.clip_observations = float(self.cfg.get("clip_observations", 100.0))
+        self.clip_actions = float(self.cfg.get("clip_actions", 100.0))
 
-    obs = np.zeros(279, dtype=np.float32)
-    action = np.zeros(12, dtype=np.float32)
-    target_dof_pos = default_angles.copy()
-    counter = 0
+        self.num_actions = int(self.cfg.get("num_actions", GO2_NUM_ACTIONS))
+        self.num_obs = int(self.cfg.get("num_obs", GO2_NUM_OBS))
+        if self.num_actions != GO2_NUM_ACTIONS:
+            raise ValueError(f"Expected 12 actions for Go2, got {self.num_actions}")
+        if self.num_obs != GO2_NUM_OBS:
+            raise ValueError(f"Expected 279 observations, got {self.num_obs}")
 
-    # 启动查看器
-    with mujoco.viewer.launch_passive(m, d) as viewer:
-        # 初始稳定：让狗子落到地上
-        for _ in range(100):
-            mujoco.mj_step(m, d)
-            viewer.sync()
+        self.obs_components = list(self.cfg.get("obs_components", GO2_OBS_COMPONENTS))
+        if self.obs_components != GO2_OBS_COMPONENTS:
+            raise ValueError(f"obs_components must match IsaacGym order: {GO2_OBS_COMPONENTS}")
 
-        # --- 1. 初始化阶段 (在 while 循环外) ---
-        obs_sensor = ObservationSensor(m, d, config, action)
-        # 预先提取一些不变的常量
-        points_local = obs_sensor.terrain_sensor.points_local
-        num_points = len(points_local)
-        # 初始化一个全零的 obs 向量
-        obs = np.zeros(279, dtype=np.float32)
+        self.measured_points_x = list(self.cfg.get("measured_points_x", GO2_MEASURED_POINTS_X))
+        self.measured_points_y = list(self.cfg.get("measured_points_y", GO2_MEASURED_POINTS_Y))
+        self.height_offset = float(self.cfg.get("height_measurements_offset", GO2_HEIGHT_MEASUREMENTS_OFFSET))
+        self.height_scale = float(
+            self.cfg.get("height_measurements_scale", self.cfg.get("height_measurements", 1.0))
+        )
+        self.ray_start_height = float(self.cfg.get("ray_start_height", 1.0))
 
-        # 为了视觉平滑，我们记录上一次探测到的世界坐标点
-        cached_world_points = np.zeros((num_points, 3))
-        cached_colors = np.zeros((num_points, 4))
+        if len(self.measured_points_x) * len(self.measured_points_y) != GO2_NUM_HEIGHT_POINTS:
+            raise ValueError(
+                f"Height measurement grid must be 21x11=231, got {len(self.measured_points_x)}x{len(self.measured_points_y)}"
+            )
 
-        while viewer.is_running():
-            step_start = time.time()
+        self.mj_model = mujoco.MjModel.from_xml_path(str(self.xml_path))
+        self.mj_data = mujoco.MjData(self.mj_model)
+        self.mj_model.opt.timestep = self.simulation_dt
 
-            # --- 2. 物理步 (必须保证高频) ---
-            tau = (target_dof_pos - d.qpos[7:]) * kps - d.qvel[6:] * kds
-            d.ctrl[:] = tau
-            mujoco.mj_step(m, d)
+        self.base_body_name = self.cfg.get("base_body_name", "base")
+        self.base_body_id = mujoco.mj_name2id(self.mj_model, mujoco.mjtObj.mjOBJ_BODY, self.base_body_name)
+        if self.base_body_id < 0:
+            raise ValueError(f"Base body '{self.base_body_name}' not found in {self.xml_path}")
 
-            # --- 3. 策略/传感器更新 (分频执行，例如 50Hz) ---
-            counter += 1
-            if counter % config["control_decimation"] == 0:
-                # 核心优化：不再重新创建对象，只更新内部数据
-                obs_sensor.actions = action
-                obs = obs_sensor.get_observations()
+        self.mujoco_joint_names = list(self.cfg.get("mujoco_joint_names", GO2_MUJOCO_JOINT_NAMES))
+        self.model_joint_names = list(self.cfg.get("model_joint_names", self.mujoco_joint_names))
+        self._build_joint_mappings()
+        self._reset_robot_pose()
 
-                # 推理
-                obs_tensor = torch.from_numpy(obs).unsqueeze(0).float().to(device)
-                with torch.no_grad():
-                    action = policy(obs_tensor).cpu().squeeze().numpy()
+        self.height_sampler = HeightMeasurementSampler(
+            model=self.mj_model,
+            data=self.mj_data,
+            base_body_id=self.base_body_id,
+            points_x=self.measured_points_x,
+            points_y=self.measured_points_y,
+            height_offset=self.height_offset,
+            height_scale=self.height_scale,
+            ray_start_height=self.ray_start_height,
+        )
 
-                # 处理 action 和 target_dof_pos...
-                action = np.clip(action, -5.0, 5.0)
-                target_dof_pos = action * config.get("action_scale", 0.25) + default_angles
+        self.policy = torch.jit.load(str(self.policy_path), map_location="cpu")
+        self.policy.eval()
+        self._try_reset_policy_memory()
 
-                # --- 4. 可视化坐标预计算 (只在采样时计算) ---
-                # 这样就不需要每物理帧都去算一遍射线和旋转了
-                base_pos = d.qpos[0:3]
-                base_quat = d.qpos[3:7]
-                from scipy.spatial.transform import Rotation as R
-                r = R.from_quat([base_quat[1], base_quat[2], base_quat[3], base_quat[0]])
-                yaw = r.as_euler('zyx')[0]
-                cos_y, sin_y = np.cos(yaw), np.sin(yaw)
-                R_yaw = np.array([[cos_y, -sin_y, 0], [sin_y, cos_y, 0], [0, 0, 1]])
+        self.last_action_model = np.zeros(self.num_actions, dtype=np.float32)
+        self.target_dof_pos_mj = self.default_angles_mj.copy()
+        self.obs = np.zeros(self.num_obs, dtype=np.float32)
 
-                for c in range(num_points):
-                    h_obs = obs[48 + c]
-                    world_sample_xy = R_yaw @ points_local[c] + base_pos
-                    z_ground = base_pos[2] - 0.2 - h_obs
-                    cached_world_points[c] = [world_sample_xy[0], world_sample_xy[1], z_ground]
+        self.save_video = save_video
+        self.video_path = video_path
+        self.renderer = None
 
-                    # 颜色预存
-                    if h_obs < -0.05: cached_colors[c] = [0, 1, 0, 1]
-                    elif h_obs > 0.05: cached_colors[c] = [1, 0, 0, 1]
-                    else: cached_colors[c] = [0.8, 0.8, 0.8, 0.6]
+    def _build_joint_mappings(self) -> None:
+        if len(self.mujoco_joint_names) != self.num_actions:
+            raise ValueError("mujoco_joint_names length must equal num_actions")
+        if len(self.model_joint_names) != self.num_actions:
+            raise ValueError("model_joint_names length must equal num_actions")
+        if set(self.mujoco_joint_names) != set(self.model_joint_names):
+            raise ValueError("mujoco_joint_names and model_joint_names must contain the same joints")
 
-            # --- 5. 渲染输出 (抽样渲染，减少绘图调用) ---
-            # 没必要每个物理步都同步 viewer，渲染频率能到 60FPS 即可
-            if counter % 10 == 0: # 假设物理是 1000Hz，这里就是 100Hz 刷新率
-                with viewer.lock():
-                    viewer.user_scn.ngeom = 0
-                    for c in range(num_points):
-                        mujoco.mjv_initGeom(
-                            viewer.user_scn.geoms[viewer.user_scn.ngeom],
-                            type=mujoco.mjtGeom.mjGEOM_SPHERE,
-                            size=[0.012, 0, 0],
-                            pos=cached_world_points[c],
-                            mat=np.eye(3).flatten(),
-                            rgba=cached_colors[c]
+        self.idx_model2mj = np.asarray(
+            [self.model_joint_names.index(name) for name in self.mujoco_joint_names],
+            dtype=np.int64,
+        )
+        self.idx_mj2model = np.asarray(
+            [self.mujoco_joint_names.index(name) for name in self.model_joint_names],
+            dtype=np.int64,
+        )
+
+        self.joint_ids_mj = []
+        self.joint_qposadr = []
+        self.joint_dofadr = []
+        for name in self.mujoco_joint_names:
+            joint_id = mujoco.mj_name2id(self.mj_model, mujoco.mjtObj.mjOBJ_JOINT, name)
+            if joint_id < 0:
+                raise ValueError(f"Joint '{name}' not found in MuJoCo model")
+            self.joint_ids_mj.append(joint_id)
+            self.joint_qposadr.append(int(self.mj_model.jnt_qposadr[joint_id]))
+            self.joint_dofadr.append(int(self.mj_model.jnt_dofadr[joint_id]))
+
+        self.joint_ids_mj = np.asarray(self.joint_ids_mj, dtype=np.int32)
+        self.joint_qposadr = np.asarray(self.joint_qposadr, dtype=np.int32)
+        self.joint_dofadr = np.asarray(self.joint_dofadr, dtype=np.int32)
+
+        joint_id_to_actuator = {}
+        for actuator_id in range(self.mj_model.nu):
+            joint_id = int(self.mj_model.actuator_trnid[actuator_id, 0])
+            joint_id_to_actuator[joint_id] = actuator_id
+
+        self.actuator_ids = np.asarray(
+            [joint_id_to_actuator[joint_id] for joint_id in self.joint_ids_mj],
+            dtype=np.int32,
+        )
+        ctrl_range = self.mj_model.actuator_ctrlrange[self.actuator_ids]
+        self.torque_min = ctrl_range[:, 0].astype(np.float32)
+        self.torque_max = ctrl_range[:, 1].astype(np.float32)
+
+    def _reset_robot_pose(self) -> None:
+        self.mj_data.qvel[:] = 0.0
+        self.mj_data.ctrl[:] = 0.0
+        self.mj_data.qpos[self.joint_qposadr] = self.default_angles_mj
+        mujoco.mj_forward(self.mj_model, self.mj_data)
+
+    def _try_reset_policy_memory(self) -> None:
+        reset_fn = getattr(self.policy, "reset_memory", None)
+        if callable(reset_fn):
+            try:
+                reset_fn()
+                print("[Info] JIT policy memory reset successfully.")
+            except Exception as exc:
+                print(f"[Warn] reset_memory() failed, continue anyway: {exc}")
+
+    def _get_joint_state_mj(self):
+           q = self.mj_data.qpos[self.joint_qposadr].copy().astype(np.float32)
+           dq = self.mj_data.qvel[self.joint_dofadr].copy().astype(np.float32)
+           return q, dq
+
+    def _get_base_pos(self) -> np.ndarray:
+           return self.mj_data.qpos[0:3].copy().astype(np.float32)
+
+    def _get_base_quat(self) -> np.ndarray:
+           return self.mj_data.qpos[3:7].copy().astype(np.float32)
+
+    def _get_lin_vel(self) -> np.ndarray:
+           base_quat = self._get_base_quat()
+           base_lin_vel = quat_rotate_inverse(base_quat, self.mj_data.qvel[0:3])
+           if not self.use_lin_vel:
+               base_lin_vel[:] = 0.0
+           return (base_lin_vel * self.lin_vel_scale).astype(np.float32)
+
+    def _get_ang_vel(self) -> np.ndarray:
+           base_quat = self._get_base_quat()
+           base_ang_vel = quat_rotate_inverse(base_quat, self.mj_data.qvel[3:6])
+           return (base_ang_vel * self.ang_vel_scale).astype(np.float32)
+
+    def _get_projected_gravity(self) -> np.ndarray:
+           base_quat = self._get_base_quat()
+           projected_gravity = quat_rotate_inverse(
+               base_quat,
+               np.array([0.0, 0.0, -1.0], dtype=np.float32),
+           )
+           return projected_gravity.astype(np.float32)
+
+    def _get_commands(self) -> np.ndarray:
+           return (self.cmd * self.cmd_scale).astype(np.float32)
+
+    def _get_dof_pos(self) -> np.ndarray:
+           q_mj, _ = self._get_joint_state_mj()
+           dof_pos = (q_mj - self.default_angles_mj) * self.dof_pos_scale
+           return dof_pos[self.idx_mj2model].astype(np.float32)
+
+    def _get_dof_vel(self) -> np.ndarray:
+           _, dq_mj = self._get_joint_state_mj()
+           dof_vel = dq_mj * self.dof_vel_scale
+           return dof_vel[self.idx_mj2model].astype(np.float32)
+
+    def _get_last_actions(self) -> np.ndarray:
+           # 保持和 IsaacGym/legged_gym 语义一致：这里返回原始 action，不乘 action_scale
+           return self.last_action_model.astype(np.float32)
+
+    def _get_height_measurements(self) -> np.ndarray:
+           base_pos = self._get_base_pos()
+           base_quat = self._get_base_quat()
+           return self.height_sampler.get_height_observation(base_pos, base_quat).astype(np.float32)
+
+    def _get_obs_component(self, name: str) -> np.ndarray:
+           getter = getattr(self, f"_get_{name}", None)
+           if getter is None:
+               raise AttributeError(f"Observation getter '_get_{name}' is not implemented.")
+           obs = getter()
+           obs = np.asarray(obs, dtype=np.float32).reshape(-1)
+           return obs
+
+    def get_observations(self) -> np.ndarray:
+           obs_parts = []
+           for name in self.obs_components:
+               obs_parts.append(self._get_obs_component(name))
+           obs = np.concatenate(obs_parts, axis=0).astype(np.float32)
+           obs = np.clip(obs, -self.clip_observations, self.clip_observations)
+
+           if obs.shape[0] != self.num_obs:
+               raise RuntimeError(
+                   f"Observation dimension mismatch: expected {self.num_obs}, got {obs.shape[0]}"
+               )
+           return obs
+
+    def _run_policy(self) -> None:
+           self.obs = self.get_observations()
+           with torch.inference_mode():
+               obs_tensor = torch.from_numpy(self.obs).unsqueeze(0)
+               policy_output = self.policy(obs_tensor)
+               action_tensor = extract_action_tensor(policy_output)
+               action_model = action_tensor.detach().cpu().numpy().reshape(-1).astype(np.float32)
+
+           if action_model.shape[0] != self.num_actions:
+               raise RuntimeError(f"Action dimension mismatch: expected {self.num_actions}, got {action_model.shape[0]}")
+
+           action_model = np.clip(action_model, -self.clip_actions, self.clip_actions)
+
+           self.last_action_model = action_model
+           action_mj = action_model[self.idx_model2mj]
+           self.target_dof_pos_mj = self.default_angles_mj + action_mj * self.action_scale
+
+
+    def _compute_torque(self) -> np.ndarray:
+        q_mj, dq_mj = self._get_joint_state_mj()
+        tau = pd_control(
+            target_q=self.target_dof_pos_mj,
+            q=q_mj,
+            kp=self.kps,
+            target_dq=np.zeros_like(dq_mj, dtype=np.float32),
+            dq=dq_mj,
+            kd=self.kds,
+        ).astype(np.float32)
+        tau = np.clip(tau, self.torque_min, self.torque_max)
+        return tau
+
+    def _configure_viewer(self, viewer) -> None:
+        viewer.cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
+        viewer.cam.trackbodyid = self.base_body_id
+        viewer.cam.distance = 2.0
+        viewer.cam.elevation = -20.0
+        viewer.cam.azimuth = 60.0
+
+    def run(self, enable_joystick: bool = False) -> None:
+        joystick = try_init_joystick(enable_joystick)
+
+        writer = None
+        frame_skip = 1
+        if self.save_video:
+            if imageio is None:
+                raise RuntimeError("save_video=True but imageio is not available.")
+            output_path = self.video_path
+            if output_path is None:
+                video_dir = LEGGED_GYM_ROOT_DIR / "deploy" / "deploy_mujoco" / "videos"
+                video_dir.mkdir(parents=True, exist_ok=True)
+                output_path = video_dir / f"{self.policy_path.stem}_sim2sim_eval.mp4"
+
+            self.renderer = mujoco.Renderer(self.mj_model, height=720, width=1280)
+            sim_fps = 1.0 / self.mj_model.opt.timestep
+            video_fps = 50
+            frame_skip = max(1, int(sim_fps / video_fps))
+            writer = imageio.get_writer(str(output_path), fps=video_fps)
+            print(f"[Info] Recording video to: {output_path}")
+
+        self._run_policy()
+        last_status_time = 0.0
+
+        with mujoco.viewer.launch_passive(self.mj_model, self.mj_data) as viewer:
+            self._configure_viewer(viewer)
+            start_wall_time = time.time()
+            sim_step = 0
+
+            while viewer.is_running() and (time.time() - start_wall_time < self.simulation_duration):
+                step_wall_time = time.time()
+
+                if sim_step % self.control_decimation == 0:
+                    if joystick is not None:
+                        self.cmd = read_xbox_command(joystick, self.max_cmd)
+                    self._run_policy()
+
+                    if step_wall_time - last_status_time > 0.1:
+                        base_quat = self.mj_data.qpos[3:7].copy().astype(np.float32)
+                        base_lin_vel = quat_rotate_inverse(base_quat, self.mj_data.qvel[0:3])
+                        base_ang_vel = quat_rotate_inverse(base_quat, self.mj_data.qvel[3:6])
+                        print(
+                            f"\r[Eval] cmd=({self.cmd[0]: .2f}, {self.cmd[1]: .2f}, {self.cmd[2]: .2f}) "
+                            f"vel=({base_lin_vel[0]: .2f}, {base_lin_vel[1]: .2f}, {base_ang_vel[2]: .2f})",
+                            end="",
+                            flush=True,
                         )
-                        viewer.user_scn.ngeom += 1
+                        last_status_time = step_wall_time
+
+                tau = self._compute_torque()
+                self.mj_data.ctrl[:] = 0.0
+                self.mj_data.ctrl[self.actuator_ids] = tau
+                mujoco.mj_step(self.mj_model, self.mj_data)
+
+                if writer is not None and sim_step % frame_skip == 0:
+                    self.renderer.update_scene(self.mj_data, camera=viewer.cam)
+                    frame = self.renderer.render()
+                    writer.append_data(frame)
+
                 viewer.sync()
 
-            # 帧率同步
-            time_until_next_step = m.opt.timestep - (time.time() - step_start)
-            if time_until_next_step > 0:
-                time.sleep(time_until_next_step)
+                sleep_time = self.mj_model.opt.timestep - (time.time() - step_wall_time)
+                if sleep_time > 0.0:
+                    time.sleep(sleep_time)
+
+                sim_step += 1
+
+        print()
+        if writer is not None:
+            writer.close()
+            print("[Info] Video saved.")
+        if pygame is not None and joystick is not None:
+            pygame.quit()
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="MuJoCo sim2sim JIT deployment evaluator for Go2.")
+    parser.add_argument("--config", type=str, default=str(DEFAULT_CONFIG_PATH), help="YAML config path.")
+    parser.add_argument("--policy-path", type=str, default=None, help="Override policy_path from YAML.")
+    parser.add_argument("--xml-path", type=str, default=None, help="Override xml_path from YAML.")
+    parser.add_argument("--duration", type=float, default=None, help="Override simulation_duration from YAML.")
+    parser.add_argument("--joystick", action="store_true", help="Enable optional joystick command input.")
+    parser.add_argument("--save-video", action="store_true", help="Record evaluation video.")
+    parser.add_argument("--video-path", type=str, default=None, help="Optional output video path.")
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    evaluator = MujocoSim2SimEvalJit(
+        config_path=Path(args.config),
+        policy_path=Path(args.policy_path).resolve() if args.policy_path else None,
+        xml_path=Path(args.xml_path).resolve() if args.xml_path else None,
+        simulation_duration=args.duration,
+        save_video=args.save_video,
+        video_path=Path(args.video_path).resolve() if args.video_path else None,
+    )
+    evaluator.run(enable_joystick=args.joystick)
+
+
+if __name__ == "__main__":
+    main()
