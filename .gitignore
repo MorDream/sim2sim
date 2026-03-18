@@ -59,3 +59,4 @@ runs
 __pycache__*.pt
 *.pt
 !deploy/deploy_mujoco/exported/go2_rough_policy.pt
+!deploy/deploy_mujoco/exported/go2_field_policy.pt

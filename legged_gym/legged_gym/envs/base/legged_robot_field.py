@@ -16,6 +16,13 @@ class LeggedRobotFieldMixin:
         print("Using LeggedRobotField.__init__, num_obs and num_privileged_obs will be computed instead of assigned.")
         super().__init__(cfg, sim_params, physics_engine, sim_device, headless)
         
+    def _get_safe_zeros(self):
+        """ Helper method to safely create zero tensor during initialization """
+        if hasattr(self, 'root_states') and self.root_states is not None:
+            return torch.zeros_like(self.root_states[:, 0])
+        else:
+            return torch.zeros(self.num_envs, device=getattr(self, 'device', 'cpu'))
+        
     def check_BarrierTrack_terrain(self):
         if getattr(self.cfg.terrain, "pad_unavailable_info", False):
             return self.cfg.terrain.selected == "BarrierTrack"
@@ -501,14 +508,14 @@ class LeggedRobotFieldMixin:
         return torch.abs(yaw)
 
     def _reward_penetrate_depth(self):
-        if not self.check_BarrierTrack_terrain(): return torch.zeros_like(self.root_states[:, 0])
+        if not self.check_BarrierTrack_terrain(): return self._get_safe_zeros()
         self.refresh_volume_sample_points()
         penetration_depths = self.terrain.get_penetration_depths(self.volume_sample_points.view(-1, 3)).view(self.num_envs, -1)
         penetration_depths *= torch.norm(self.volume_sample_points_vel, dim= -1) + 1e-3
         return torch.sum(penetration_depths, dim= -1)
 
     def _reward_penetrate_volume(self):
-        if not self.check_BarrierTrack_terrain(): return torch.zeros_like(self.root_states[:, 0])
+        if not self.check_BarrierTrack_terrain(): return self._get_safe_zeros()
         self.refresh_volume_sample_points()
         penetration_mask = self.terrain.get_penetration_mask(self.volume_sample_points.view(-1, 3)).view(self.num_envs, -1)
         penetration_mask *= torch.norm(self.volume_sample_points_vel, dim= -1) + 1e-3
@@ -518,7 +525,7 @@ class LeggedRobotFieldMixin:
         """ Conditioned reward term in terms of whether the robot is engaging the tilt obstacle
         Use positive factor to enable rolling angle when incountering tilt obstacle
         """
-        if not self.check_BarrierTrack_terrain(): return torch.zeros_like(self.root_states[:, 0])
+        if not self.check_BarrierTrack_terrain(): return self._get_safe_zeros()
         roll, pitch, yaw = get_euler_xyz(self.root_states[:, 3:7])
         pi = torch.acos(torch.zeros(1)).item() * 2 # which is 3.1415927410125732
         roll[roll > pi] -= pi * 2 # to range (-pi, pi)
@@ -547,8 +554,8 @@ class LeggedRobotFieldMixin:
         return torch.sum(torch.square(self.dof_pos[:, self.rear_hip_indices] - self.default_dof_pos[:, self.rear_hip_indices]), dim=1)
     
     def _reward_down_cond(self):
-        if not self.check_BarrierTrack_terrain(): return torch.zeros_like(self.root_states[:, 0])
-        if not hasattr(self, "volume_sample_points"): return torch.zeros_like(self.root_states[:, 0])
+        if not self.check_BarrierTrack_terrain(): return self._get_safe_zeros()
+        if not hasattr(self, "volume_sample_points"): return self._get_safe_zeros()
         self.refresh_volume_sample_points()
         engaging_obstacle_types = self.terrain.get_engaging_block_types(
             self.root_states[:, :3],
@@ -568,8 +575,8 @@ class LeggedRobotFieldMixin:
         return torch.exp(-pitch_err/self.cfg.rewards.tracking_sigma) * engaging_mask # the higher positive factor, the more you want the robot to pitch down 0.2 rad
 
     def _reward_jump_x_vel_cond(self):
-        if not self.check_BarrierTrack_terrain(): return torch.zeros_like(self.root_states[:, 0])
-        if not hasattr(self, "volume_sample_points"): return torch.zeros_like(self.root_states[:, 0])
+        if not self.check_BarrierTrack_terrain(): return self._get_safe_zeros()
+        if not hasattr(self, "volume_sample_points"): return self._get_safe_zeros()
         self.refresh_volume_sample_points()
         engaging_obstacle_types = self.terrain.get_engaging_block_types(
             self.root_states[:, :3],
@@ -586,8 +593,8 @@ class LeggedRobotFieldMixin:
 
     def _reward_sync_legs_cond(self):
         """ A hack to force same actuation on both rear legs when jump. """
-        if not self.check_BarrierTrack_terrain(): return torch.zeros_like(self.root_states[:, 0])
-        if not hasattr(self, "volume_sample_points"): return torch.zeros_like(self.root_states[:, 0])
+        if not self.check_BarrierTrack_terrain(): return self._get_safe_zeros()
+        if not hasattr(self, "volume_sample_points"): return self._get_safe_zeros()
         self.refresh_volume_sample_points()
         engaging_obstacle_types = self.terrain.get_engaging_block_types(
             self.root_states[:, :3],
@@ -601,8 +608,8 @@ class LeggedRobotFieldMixin:
     
     def _reward_sync_all_legs_cond(self):
         """ A hack to force same actuation on both front/rear legs when jump. """
-        if not self.check_BarrierTrack_terrain(): return torch.zeros_like(self.root_states[:, 0])
-        if not hasattr(self, "volume_sample_points"): return torch.zeros_like(self.root_states[:, 0])
+        if not self.check_BarrierTrack_terrain(): return self._get_safe_zeros()
+        if not hasattr(self, "volume_sample_points"): return self._get_safe_zeros()
         self.refresh_volume_sample_points()
         engaging_obstacle_types = self.terrain.get_engaging_block_types(
             self.root_states[:, :3],
@@ -636,8 +643,8 @@ class LeggedRobotFieldMixin:
     
     def _reward_dof_error_cond(self):
         """ Force dof error when not engaging obstacle """
-        if not self.check_BarrierTrack_terrain(): return torch.zeros_like(self.root_states[:, 0])
-        if not hasattr(self, "volume_sample_points"): return torch.zeros_like(self.root_states[:, 0])
+        if not self.check_BarrierTrack_terrain(): return self._get_safe_zeros()
+        if not hasattr(self, "volume_sample_points"): return self._get_safe_zeros()
         self.refresh_volume_sample_points()
         engaging_obstacle_types = self.terrain.get_engaging_block_types(
             self.root_states[:, :3],
@@ -648,8 +655,8 @@ class LeggedRobotFieldMixin:
         
     def _reward_leap_bonous_cond(self):
         """ counteract the tracking reward loss during leap"""
-        if not self.check_BarrierTrack_terrain(): return torch.zeros_like(self.root_states[:, 0])
-        if not hasattr(self, "volume_sample_points"): return torch.zeros_like(self.root_states[:, 0])
+        if not self.check_BarrierTrack_terrain(): return self._get_safe_zeros()
+        if not hasattr(self, "volume_sample_points"): return self._get_safe_zeros()
         self.refresh_volume_sample_points()
         engaging_obstacle_distance = self.terrain.get_engaging_block_distance(
             self.root_states[:, :3],
@@ -664,6 +671,20 @@ class LeggedRobotFieldMixin:
 
         world_vel_error = torch.sum(torch.square(self.commands[:, :2] - self.root_states[:, 7:9]), dim= 1)
         return (1 - torch.exp(-world_vel_error/self.cfg.rewards.tracking_sigma)) * engaging_mask # reverse version of tracking reward
+
+    def _reward_leap_x_vel_cond(self):
+        """ 鼓励机器人在leap前加速并俯身 """
+        if not self.check_BarrierTrack_terrain(): return self._get_safe_zeros()
+        if not hasattr(self, "volume_sample_points"): return self._get_safe_zeros()
+        self.refresh_volume_sample_points()
+        engaging_obstacle_types = self.terrain.get_engaging_block_types(
+            self.root_states[:, :3],
+            self.volume_sample_points - self.root_states[:, :3].unsqueeze(-2), # (n_envs, n_points, 3)
+        )
+        engaging_mask = (engaging_obstacle_types == self.terrain.track_options_id_dict["leap"])
+        # 在gap前加速
+        return torch.clip(self.base_lin_vel[:, 0], max= 2.0) * engaging_mask
+
 
 class LeggedRobotField(LeggedRobotFieldMixin, LeggedRobot):
     pass

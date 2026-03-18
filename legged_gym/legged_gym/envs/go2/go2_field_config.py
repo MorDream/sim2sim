@@ -26,33 +26,29 @@ class Go2FieldCfg( Go2RoughCfg ):
 
         pad_unavailable_info = True
         BarrierTrack_kwargs = dict(
-            # options= [
-            #     "jump",
-            #     "leap",
-            #     "hurdle",
-            #     "down",
-            #     "tilted_ramp",
-            #     "stairsup",
-            #     "stairsdown",
-            #     "discrete_rect",
-            #     "slope",
-            #     "wave",
-            # ], # each race track will permute all the options
             options= [
-                 "leap",
-                 "crawl",
-                 "tilt"
-            ],
+                "jump",
+                "leap",
+                "hurdle",
+                "down",
+                "tilted_ramp",
+                "stairsup",
+                "stairsdown",
+                "discrete_rect",
+                "slope",
+                "wave",
+                "leap",
+            ], # each race track will permute all the options
             jump= dict(
                 height= [0.05, 0.5],
                 depth= [0.1, 0.3],
                 # fake_offset= 0.1,
             ),
             leap= dict(
-                length= [0.05, 0.8],
-                depth= [0.5, 0.8],
+                length= [0.2, 0.8],
+                depth= [0.4, 0.8],
                 height= 0.2, # expected leap height over the gap
-                # fake_offset= 0.1,
+                fake_offset= 0.1,
             ),
             hurdle= dict(
                 height= [0.05, 0.5],
@@ -184,7 +180,7 @@ class Go2FieldCfg( Go2RoughCfg ):
             # penetration penalty
             penetrate_depth = -0.05
             #add
-            leap_bonous_cond = 2
+            leap_bonous_cond = 4.0
             powers = -1e-7
             
             jump_x_vel_cond = 0.5 #这个奖励函数是为了鼓励机器人在跳跃障碍时，具有一定的前进速度并且有一个适当的俯仰角（pitch）。
@@ -194,6 +190,7 @@ class Go2FieldCfg( Go2RoughCfg ):
             action_rate = -0.1 # 惩罚动作变化率过大
             action_smoothness = -0.01
             feet_air_time = 0.5 # 奖励足部离地时间，鼓励跳跃动作
+            leap_x_vel_cond = 1.0
 
     class noise( Go2RoughCfg.noise ):
         add_noise = False

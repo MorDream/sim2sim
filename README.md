@@ -5,6 +5,25 @@ To run sim2sim for mujoco:
   cd deploy/deploy_mujoco
   python deploy_mujoco.py
   ```
+# 基线
+## go2_rough:
+目前go2的平地任务已经训练的很好了，配置在`legged_gym/legged_gym/envs/go2/go2_config.py`下
+  训练得到的最后一个版本的pt文件在`legged_gym/logs/rough_go2/Mar12_06-30-27_Go2Rough`下
+  jit文件`/root/mym/parkour-main/deploy/deploy_mujoco/exported/go2_rough_policy.pt`
+  运行sim2sim在`deploy/deploy_mujoco/configs/g2.yaml`将policy_path改为jit文件的路径即可 
+  ```
+  cd deploy/deploy_mujoco
+  python deploy_mujoco.py
+  ```
+## go2_field：
+目前go2的field任务正在训练，配置在`legged_gym/legged_gym/envs/go2/go2_field_config.py`下
+  训练得到的最后一个版本的pt文件在`legged_gym/logs/field_go2/Mar18_04-10-13_Go2_11skills`下
+  jit文件`/root/mym/parkour-main/deploy/deploy_mujoco/exported/go2_field_policy.pt`
+  运行sim2sim在`deploy/deploy_mujoco/configs/g2.yaml`将policy_path改为jit文件的路径即可 
+  ```
+  cd deploy/deploy_mujoco
+  python deploy_mujoco.py
+  ```
 
 
 # Robot Parkour Learning #
