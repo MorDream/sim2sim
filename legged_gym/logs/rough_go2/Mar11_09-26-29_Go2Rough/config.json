@@ -1,0 +1,656 @@
+{
+    "algorithm": {
+        "clip_min_std": 0.2,
+        "clip_param": 0.2,
+        "desired_kl": 0.01,
+        "entropy_coef": 0.01,
+        "gamma": 0.99,
+        "lam": 0.95,
+        "learning_rate": 0.0001,
+        "max_grad_norm": 1.0,
+        "num_learning_epochs": 5,
+        "num_mini_batches": 4,
+        "optimizer_class_name": "AdamW",
+        "schedule": "adaptive",
+        "use_clipped_value_loss": true,
+        "value_loss_coef": 1.0
+    },
+    "init_member_classes": {},
+    "policy": {
+        "activation": "elu",
+        "actor_hidden_dims": [
+            512,
+            256,
+            128
+        ],
+        "critic_encoder_component_names": [
+            "height_measurements"
+        ],
+        "critic_hidden_dims": [
+            512,
+            256,
+            128
+        ],
+        "encoder_class_name": "MlpModel",
+        "encoder_component_names": [
+            "height_measurements"
+        ],
+        "encoder_kwargs": {
+            "hidden_sizes": [
+                128,
+                64
+            ],
+            "nonlinearity": "CELU"
+        },
+        "encoder_output_size": 32,
+        "estimator_kwargs": {
+            "hidden_sizes": [
+                128,
+                64
+            ],
+            "nonlinearity": "CELU"
+        },
+        "estimator_obs_components": [
+            "ang_vel",
+            "projected_gravity",
+            "commands",
+            "dof_pos",
+            "dof_vel",
+            "last_actions"
+        ],
+        "estimator_target_components": [
+            "lin_vel"
+        ],
+        "init_noise_std": 0.5,
+        "mu_activation": null,
+        "replace_state_prob": 1.0,
+        "rnn_type": "gru"
+    },
+    "runner": {
+        "algorithm_class_name": "EstimatorPPO",
+        "checkpoint": -1,
+        "experiment_name": "rough_go2",
+        "load_run": "/root/mym/parkour-main/legged_gym/logs/rough_go2/Mar11_07-16-03_Go2Rough",
+        "log_interval": 100,
+        "max_iterations": 20000,
+        "num_steps_per_env": 24,
+        "policy_class_name": "EncoderStateAcRecurrent",
+        "resume": true,
+        "resume_path": null,
+        "run_name": "Go2Rough",
+        "save_interval": 1000
+    },
+    "runner_class_name": "OnPolicyRunner",
+    "seed": 1,
+    "asset": {
+        "angular_damping": 0.0,
+        "armature": 0.0,
+        "collapse_fixed_joints": true,
+        "default_dof_drive_mode": 3,
+        "density": 0.001,
+        "disable_gravity": false,
+        "dof_velocity_override": 35.0,
+        "file": "{LEGGED_GYM_ROOT_DIR}/resources/robots/go2/urdf/go2.urdf",
+        "fix_base_link": false,
+        "flip_visual_attachments": true,
+        "foot_name": "foot",
+        "front_hip_names": [
+            "FL_hip_joint",
+            "FR_hip_joint"
+        ],
+        "linear_damping": 0.0,
+        "max_angular_velocity": 1000.0,
+        "max_linear_velocity": 1000.0,
+        "name": "go2",
+        "penalize_contacts_on": [
+            "thigh",
+            "calf"
+        ],
+        "rear_hip_names": [
+            "RL_hip_joint",
+            "RR_hip_joint"
+        ],
+        "replace_cylinder_with_capsule": true,
+        "sdk_dof_range": {
+            "Hip_max": 1.0472,
+            "Hip_min": -1.0472,
+            "Front_Thigh_max": 3.4907,
+            "Front_Thigh_min": -1.5708,
+            "Rear_Thingh_max": 4.5379,
+            "Rear_Thingh_min": -0.5236,
+            "Calf_max": -0.83776,
+            "Calf_min": -2.7227
+        },
+        "self_collisions": 0,
+        "terminate_after_contacts_on": [
+            "base"
+        ],
+        "thickness": 0.01
+    },
+    "commands": {
+        "ang_cmd_cutoff": 0.2,
+        "curriculum": false,
+        "heading_command": false,
+        "lin_cmd_cutoff": 0.2,
+        "max_curriculum": 1.0,
+        "num_commands": 4,
+        "ranges": {
+            "ang_vel_yaw": [
+                -2.0,
+                2.0
+            ],
+            "heading": [
+                -3.14,
+                3.14
+            ],
+            "lin_vel_x": [
+                -1.0,
+                1.5
+            ],
+            "lin_vel_y": [
+                -1.0,
+                1.0
+            ]
+        },
+        "resampling_time": 5
+    },
+    "control": {
+        "action_scale": 0.5,
+        "computer_clip_torque": false,
+        "control_type": "P",
+        "damping": {
+            "joint": 1.0
+        },
+        "decimation": 4,
+        "motor_clip_torque": true,
+        "stiffness": {
+            "joint": 40.0
+        }
+    },
+    "domain_rand": {
+        "added_mass_range": [
+            1.0,
+            3.0
+        ],
+        "com_range": {
+            "x": [
+                -0.02,
+                0.02
+            ],
+            "y": [
+                -0.01,
+                0.01
+            ],
+            "z": [
+                -0.05,
+                0.05
+            ]
+        },
+        "friction_range": [
+            0.0,
+            3.0
+        ],
+        "init_base_pos_range": {
+            "x": [
+                0.05,
+                0.6
+            ],
+            "y": [
+                -0.25,
+                0.25
+            ]
+        },
+        "init_base_rot_range": {
+            "roll": [
+                -0.75,
+                0.75
+            ],
+            "pitch": [
+                -0.5,
+                0.5
+            ]
+        },
+        "init_base_vel_range": {
+            "x": [
+                -0.2,
+                1.5
+            ],
+            "y": [
+                -0.2,
+                0.2
+            ],
+            "z": [
+                -0.2,
+                0.2
+            ],
+            "roll": [
+                -1.0,
+                1.0
+            ],
+            "pitch": [
+                -1.0,
+                1.0
+            ],
+            "yaw": [
+                -1.0,
+                1.0
+            ]
+        },
+        "init_dof_pos_ratio_range": [
+            0.5,
+            1.5
+        ],
+        "init_dof_vel_range": [
+            -5,
+            5
+        ],
+        "leg_motor_strength_range": [
+            0.8,
+            1.2
+        ],
+        "max_push_vel_ang": 0.0,
+        "max_push_vel_xy": 0.5,
+        "push_interval": 101.0,
+        "push_interval_s": 2,
+        "push_robots": true,
+        "randomize_base_mass": true,
+        "randomize_com": true,
+        "randomize_friction": true,
+        "randomize_motor": true
+    },
+    "env": {
+        "episode_length_s": 20,
+        "history_len": 10,
+        "num_actions": 12,
+        "num_envs": 4096,
+        "num_observations": null,
+        "num_privileged_obs": null,
+        "obs_components": [
+            "lin_vel",
+            "ang_vel",
+            "projected_gravity",
+            "commands",
+            "dof_pos",
+            "dof_vel",
+            "last_actions",
+            "height_measurements"
+        ],
+        "send_timeouts": true,
+        "use_lin_vel": false
+    },
+    "init_state": {
+        "ang_vel": [
+            0.0,
+            0.0,
+            0.0
+        ],
+        "default_joint_angles": {
+            "FL_hip_joint": 0.1,
+            "FL_thigh_joint": 0.7,
+            "FL_calf_joint": -1.5,
+            "FR_hip_joint": -0.1,
+            "FR_thigh_joint": 0.7,
+            "FR_calf_joint": -1.5,
+            "RL_hip_joint": 0.1,
+            "RL_thigh_joint": 1.0,
+            "RL_calf_joint": -1.5,
+            "RR_hip_joint": -0.1,
+            "RR_thigh_joint": 1.0,
+            "RR_calf_joint": -1.5
+        },
+        "lin_vel": [
+            0.0,
+            0.0,
+            0.0
+        ],
+        "pos": [
+            0.0,
+            0.0,
+            0.5
+        ],
+        "rot": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+        ]
+    },
+    "noise": {
+        "add_noise": false,
+        "noise_level": 1.0,
+        "noise_scales": {
+            "ang_vel": 0.2,
+            "dof_pos": 0.01,
+            "dof_vel": 1.5,
+            "gravity": 0.05,
+            "height_measurements": 0.1,
+            "lin_vel": 0.1
+        }
+    },
+    "normalization": {
+        "clip_actions": 100.0,
+        "clip_actions_method": null,
+        "clip_observations": 100.0,
+        "height_measurements_offset": -0.2,
+        "obs_scales": {
+            "ang_vel": 0.25,
+            "commands": [
+                2.0,
+                2.0,
+                0.25
+            ],
+            "dof_pos": 1.0,
+            "dof_vel": 0.05,
+            "height_measurements": 5.0,
+            "lin_vel": 1.0
+        }
+    },
+    "rewards": {
+        "base_height_target": 0.32,
+        "clearance_height_target": -0.22,
+        "dof_error_names": [
+            "FL_hip_joint",
+            "FR_hip_joint",
+            "RL_hip_joint",
+            "RR_hip_joint"
+        ],
+        "max_contact_force": 100.0,
+        "only_positive_rewards": false,
+        "scales": {
+            "action_rate": -0.01,
+            "action_smoothness": -0.01,
+            "ang_vel_xy": -0.1,
+            "base_height": -10.0,
+            "collision": -1,
+            "dof_acc": -2.5e-07,
+            "dof_vel": -0.0,
+            "feet_air_time": -2.0,
+            "feet_contact_forces": -0.00015,
+            "feet_stumble": -0.0,
+            "foot_clearance": -0.5,
+            "foot_mirror": -0.05,
+            "foot_slide": -0.05,
+            "has_contact": 1.0,
+            "hip_pos": -5.0,
+            "lin_vel_z": -4,
+            "orientation": -0.2,
+            "powers": -2e-05,
+            "stand_still": -1.0,
+            "stumble": -0.05,
+            "termination": -0.0,
+            "torques": -1e-05,
+            "tracking_ang_vel": 1.0,
+            "tracking_lin_vel": 2.0
+        },
+        "soft_dof_pos_limit": 0.9,
+        "soft_dof_vel_limit": 0.9,
+        "soft_torque_limit": 0.9,
+        "tracking_sigma": 0.25
+    },
+    "sensor": {
+        "proprioception": {
+            "latency_range": [
+                0.005,
+                0.045
+            ],
+            "latency_resampling_time": 5.0,
+            "obs_components": [
+                "ang_vel",
+                "projected_gravity",
+                "commands",
+                "dof_pos",
+                "dof_vel"
+            ]
+        }
+    },
+    "sim": {
+        "body_measure_points": {
+            "base": {
+                "x": [
+                    -0.24,
+                    -0.21,
+                    -0.18,
+                    -0.15,
+                    -0.12,
+                    -0.09,
+                    -0.06,
+                    -0.03,
+                    0.0,
+                    0.030000000000000027,
+                    0.06,
+                    0.08999999999999997,
+                    0.12,
+                    0.15000000000000002,
+                    0.18,
+                    0.20999999999999996,
+                    0.24,
+                    0.27,
+                    0.30000000000000004,
+                    0.32999999999999996,
+                    0.36,
+                    0.39
+                ],
+                "y": [
+                    -0.08,
+                    -0.04,
+                    0.0,
+                    0.04,
+                    0.08
+                ],
+                "z": [
+                    -0.061,
+                    -0.031,
+                    -0.0010000000000000009,
+                    0.028999999999999998,
+                    0.059
+                ],
+                "transform": [
+                    0.0,
+                    0.0,
+                    0.005,
+                    0.0,
+                    0.0,
+                    0.0
+                ]
+            },
+            "thigh": {
+                "x": [
+                    -0.16,
+                    -0.158,
+                    -0.156,
+                    -0.154,
+                    -0.152,
+                    -0.15,
+                    -0.145,
+                    -0.14,
+                    -0.135,
+                    -0.13,
+                    -0.125,
+                    -0.12,
+                    -0.115,
+                    -0.11,
+                    -0.105,
+                    -0.1,
+                    -0.095,
+                    -0.09,
+                    -0.085,
+                    -0.08,
+                    -0.075,
+                    -0.07,
+                    -0.065,
+                    -0.05,
+                    0.0,
+                    0.05,
+                    0.1
+                ],
+                "y": [
+                    -0.015,
+                    -0.01,
+                    0.0,
+                    -0.01,
+                    0.015
+                ],
+                "z": [
+                    -0.03,
+                    -0.015,
+                    0.0,
+                    0.015
+                ],
+                "transform": [
+                    0.0,
+                    0.0,
+                    -0.1,
+                    0.0,
+                    1.57079632679,
+                    0.0
+                ]
+            },
+            "calf": {
+                "x": [
+                    -0.13,
+                    -0.1,
+                    -0.07,
+                    -0.04000000000000001,
+                    -0.010000000000000009,
+                    0.01999999999999999,
+                    0.04999999999999999,
+                    0.07999999999999999,
+                    0.10999999999999999
+                ],
+                "y": [
+                    -0.015,
+                    0.0,
+                    0.015
+                ],
+                "z": [
+                    -0.015,
+                    0.0,
+                    0.015
+                ],
+                "transform": [
+                    0.0,
+                    0.0,
+                    -0.11,
+                    0.0,
+                    1.57079632679,
+                    0.0
+                ]
+            }
+        },
+        "dt": 0.005,
+        "gravity": [
+            0.0,
+            0.0,
+            -9.81
+        ],
+        "no_camera": true,
+        "physx": {
+            "bounce_threshold_velocity": 0.5,
+            "contact_collection": 2,
+            "contact_offset": 0.01,
+            "default_buffer_size_multiplier": 5,
+            "max_depenetration_velocity": 1.0,
+            "max_gpu_contact_pairs": 8388608,
+            "num_position_iterations": 4,
+            "num_threads": 10,
+            "num_velocity_iterations": 0,
+            "rest_offset": 0.0,
+            "solver_type": 1
+        },
+        "substeps": 1,
+        "up_axis": 1
+    },
+    "termination": {
+        "pitch_kwargs": {
+            "threshold": 3.0
+        },
+        "roll_kwargs": {
+            "threshold": 3.0
+        },
+        "termination_terms": [
+            "roll",
+            "pitch"
+        ]
+    },
+    "terrain": {
+        "TerrainPerlin_kwargs": {
+            "zScale": 0.07,
+            "frequency": 10
+        },
+        "border_size": 5,
+        "curriculum": false,
+        "dynamic_friction": 1.0,
+        "horizontal_scale": 0.025,
+        "max_init_terrain_level": 5,
+        "measure_heights": true,
+        "measured_points_x": [
+            -0.5,
+            -0.4,
+            -0.30000000000000004,
+            -0.20000000000000007,
+            -0.10000000000000009,
+            -1.1102230246251565e-16,
+            0.09999999999999987,
+            0.19999999999999984,
+            0.2999999999999998,
+            0.3999999999999998,
+            0.4999999999999998,
+            0.5999999999999996,
+            0.6999999999999997,
+            0.7999999999999998,
+            0.8999999999999997,
+            0.9999999999999996,
+            1.0999999999999996,
+            1.1999999999999997,
+            1.2999999999999996,
+            1.3999999999999995,
+            1.4999999999999996
+        ],
+        "measured_points_y": [
+            -0.5,
+            -0.4,
+            -0.30000000000000004,
+            -0.20000000000000007,
+            -0.10000000000000009,
+            -1.1102230246251565e-16,
+            0.09999999999999987,
+            0.19999999999999984,
+            0.2999999999999998,
+            0.3999999999999998,
+            0.4999999999999998
+        ],
+        "mesh_type": null,
+        "num_cols": 16,
+        "num_rows": 16,
+        "restitution": 0.0,
+        "selected": "TerrainPerlin",
+        "slope_treshold": 1.0,
+        "static_friction": 1.0,
+        "terrain_length": 4.0,
+        "terrain_width": 4.0,
+        "vertical_scale": 0.005
+    },
+    "viewer": {
+        "commands": {
+            "color": [
+                0.1,
+                0.8,
+                0.1
+            ],
+            "size": 0.5
+        },
+        "draw_commands": true,
+        "lookat": [
+            0.0,
+            0.0,
+            0.3
+        ],
+        "pos": [
+            -1.0,
+            -1.0,
+            0.4
+        ],
+        "ref_env": 0,
+        "stream_depth": false
+    }
+}
