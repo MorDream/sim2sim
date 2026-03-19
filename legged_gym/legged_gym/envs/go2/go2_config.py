@@ -4,6 +4,7 @@ import os.path as osp
 
 from legged_gym.envs.base.legged_robot_config import LeggedRobotCfg, LeggedRobotCfgPPO
 
+
 go2_action_scale = 0.5
 go2_const_dof_range = dict(
     Hip_max= 1.0472,

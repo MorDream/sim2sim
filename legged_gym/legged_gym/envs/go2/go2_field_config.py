@@ -23,7 +23,7 @@ class Go2FieldCfg( Go2RoughCfg ):
 
         max_init_terrain_level = 2
         curriculum = True
-
+        
         pad_unavailable_info = True
         BarrierTrack_kwargs = dict(
             options= [
@@ -45,10 +45,10 @@ class Go2FieldCfg( Go2RoughCfg ):
                 # fake_offset= 0.1,
             ),
             leap= dict(
-                length= [0.2, 0.8],
-                depth= [0.4, 0.8],
+                length= [0.1, 0.5],
+                depth= [0.5, 0.8],
                 height= 0.2, # expected leap height over the gap
-                fake_offset= 0.1,
+                # fake_offset= 0.1,
             ),
             hurdle= dict(
                 height= [0.05, 0.5],
@@ -139,7 +139,7 @@ class Go2FieldCfg( Go2RoughCfg ):
         class ranges( Go2RoughCfg.commands.ranges ):
             # lin_vel_x = [0.6, 1.8]
             lin_vel_x = [-0.6, 2.0]
-
+        
         is_goal_based = True
         class goal_based:
             # the ratios are related to the goal position in robot frame
@@ -180,14 +180,14 @@ class Go2FieldCfg( Go2RoughCfg ):
             # penetration penalty
             penetrate_depth = -0.05
             #add
-            leap_bonous_cond = 4.0
+            leap_bonous_cond = 2.0
             powers = -1e-7
             
             jump_x_vel_cond = 0.5 #这个奖励函数是为了鼓励机器人在跳跃障碍时，具有一定的前进速度并且有一个适当的俯仰角（pitch）。
             sync_legs_cond = 0.5#跳跃时，强制机器人前后腿同步运动
             dof_error_cond = -1#惩罚机器人在未接触障碍物时的关节误差
             
-            action_rate = -0.1 # 惩罚动作变化率过大
+            action_rate = -1 # 惩罚动作变化率过大
             action_smoothness = -0.01
             feet_air_time = 0.5 # 奖励足部离地时间，鼓励跳跃动作
             leap_x_vel_cond = 1.0
@@ -199,7 +199,7 @@ class Go2FieldCfg( Go2RoughCfg ):
         penetrate_depth_threshold_harder = 100
         penetrate_depth_threshold_easier = 200
         no_moveup_when_fall = True
-
+    
 logs_root = osp.join(osp.dirname(osp.dirname(osp.dirname(osp.dirname(osp.abspath(__file__))))), "logs")
 class Go2FieldCfgPPO( Go2RoughCfgPPO ):
     class algorithm( Go2RoughCfgPPO.algorithm ):
@@ -210,13 +210,13 @@ class Go2FieldCfgPPO( Go2RoughCfgPPO ):
 
         resume = True
         load_run = osp.join(logs_root, "field_go2",
-            "Mar17_02-10-07_Go2_12skills",
+            "3.16很不错，但是宽一点的坑还是不跳",
         )
 
         run_name = "".join(["Go2_",
             ("{:d}skills".format(len(Go2FieldCfg.terrain.BarrierTrack_kwargs["options"])))
         ])
 
-        max_iterations = 5000
+        max_iterations = 2000
         save_interval = 1000
         log_interval = 100
