@@ -7,7 +7,7 @@ from legged_gym.envs.go2.go2_config import Go2RoughCfg, Go2RoughCfgPPO
 
 class Go2FieldCfg( Go2RoughCfg ):
     class init_state( Go2RoughCfg.init_state ):
-        pos = [0.0, 0.0, 0.7]
+        pos = [0.0, 0.0, 0.5]
         zero_actions = False
 
     class sensor( Go2RoughCfg.sensor):
@@ -165,22 +165,22 @@ class Go2FieldCfg( Go2RoughCfg ):
 
     class rewards( Go2RoughCfg.rewards ):
         class scales:
-            tracking_lin_vel = 1.
+            tracking_lin_vel = 4.
             tracking_ang_vel = 1.
             energy_substeps = -2e-7
             torques = -1e-7
             stand_still = -2.
             dof_error_named = -2.
             dof_error = -0.005
-            collision = -0.05
+            collision = -1e-4
             lazy_stop = -1.
             # penalty for hardware safety
             exceed_dof_pos_limits = -0.1
             exceed_torque_limits_l1norm = -0.1
             # penetration penalty
-            penetrate_depth = -0.05
+            penetrate_depth = -0.001
             #add
-            leap_bonous_cond = 2.0
+            leap_bonous_cond = 6.0
             powers = -1e-7
             
             jump_x_vel_cond = 0.5 #这个奖励函数是为了鼓励机器人在跳跃障碍时，具有一定的前进速度并且有一个适当的俯仰角（pitch）。
@@ -191,6 +191,10 @@ class Go2FieldCfg( Go2RoughCfg ):
             action_smoothness = -0.01
             feet_air_time = 0.5 # 奖励足部离地时间，鼓励跳跃动作
             leap_x_vel_cond = 1.0
+            
+            hip_pos = -1.  
+        tracking_sigma = 0.35
+        soft_dof_pos_limit = 0.7
 
     class noise( Go2RoughCfg.noise ):
         add_noise = False
@@ -217,6 +221,6 @@ class Go2FieldCfgPPO( Go2RoughCfgPPO ):
             ("{:d}skills".format(len(Go2FieldCfg.terrain.BarrierTrack_kwargs["options"])))
         ])
 
-        max_iterations = 2000
+        max_iterations = 1000
         save_interval = 1000
         log_interval = 100

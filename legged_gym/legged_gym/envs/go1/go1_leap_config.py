@@ -89,26 +89,34 @@ class Go1LeapCfg( Go1FieldCfg ):
 
     class rewards( Go1FieldCfg.rewards ):
         class scales:
-            tracking_ang_vel = 0.05
-            # world_vel_l2norm = -1.
-            tracking_world_vel = 5.
-            # leap_bonous_cond = 6.
-            legs_energy_substeps = -7e-6 # 5e5 spike (not scaled)
-            # alive = 3.
-            penetrate_depth = -1e-2 # 8 spike (not scaled)
-            penetrate_volume = -1e-4 # 100 spike (not scaled)
-            exceed_dof_pos_limits = -8e-1
-            exceed_torque_limits_l1norm = -1.
-            # action_rate = -0.1
-            delta_torques = -1e-7
-            dof_acc = -1e-7
-            torques = -4e-5 # 2000 spike (not scaled)
-            yaw_abs = -0.2
-            collision = -1.
-            lin_pos_y = -0.4
-            orientation = -0.1 # 0.3 segment (not scaled)
-            hip_pos = -5. # 0.5 spike (not scaled)
-            dof_error = -0.15 # 1.2 spike (not scaled)
+            # --- 任务追踪奖励 ---
+            tracking_ang_vel = 0.05            # 角速度追踪：鼓励偏航角速度符合指令
+            tracking_world_vel = 5.0           # 世界坐标系速度追踪：核心动力，鼓励向前跑
+            # leap_bonous_cond = 6.0           # 跳跃补偿奖励：建议开启，用于抵消跳坑时的速度损失
+
+            # --- 物理约束惩罚 (惩罚项通常为负) ---
+            legs_energy_substeps = -7e-6       # 能量损耗：惩罚关节功率过高 (针对 5e5 级峰值)
+            penetrate_depth = -1e-2            # 穿透深度：惩罚足端或身体没入地面 (针对 8 级峰值)
+            penetrate_volume = -1e-4           # 穿透体积：惩罚机身与障碍物重叠 (针对 100 级峰值)
+            
+            # --- 关节与力矩限制 ---
+            exceed_dof_pos_limits = -8e-1      # 关节限位：惩罚关节角度超出物理安全范围
+            exceed_torque_limits_l1norm = -1.0 # 力矩超限：严厉惩罚要求电机输出超过额定极限
+            delta_torques = -1e-7              # 力矩变化率：惩罚力矩突变，鼓励平滑输出
+            dof_acc = -1e-7                    # 关节加速度：惩罚关节瞬间暴走
+            torques = -4e-5                    # 力矩绝对值：惩罚大电流输出，鼓励节能 (针对 2000 级峰值)
+
+            # --- 姿态与稳定性控制 ---
+            yaw_abs = -0.2                     # 偏航角绝对值：防止机身在前进时乱转
+            collision = -1.0                   # 碰撞惩罚：严厉惩罚躯干或膝盖撞击障碍物
+            lin_pos_y = -0.4                   # 横向位移：惩罚侧向晃动，保持直线行进
+            orientation = -0.1                 # 躯干姿态：惩罚倾斜 (Roll/Pitch)，保持机身水平
+            hip_pos = -5.0                     # 髋部位置惩罚：极重惩罚，防止大腿根部位置异常
+            dof_error = -0.15                  # 关节误差：惩罚实际角度与标准姿态的偏离
+
+            # --- 其他 (根据需要取消注释) ---
+            # alive = 3.0                      # 生存奖励：只要不死就给分
+            # action_rate = -0.1               # 动作变化率：惩罚动作输出过快，防止高频抖动
         tracking_sigma = 0.35
         only_positive_rewards = False
         soft_dof_pos_limit = 0.7

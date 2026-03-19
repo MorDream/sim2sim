@@ -673,17 +673,29 @@ class LeggedRobotFieldMixin:
         return (1 - torch.exp(-world_vel_error/self.cfg.rewards.tracking_sigma)) * engaging_mask # reverse version of tracking reward
 
     def _reward_leap_x_vel_cond(self):
-        """ 鼓励机器人在leap前加速并俯身 """
+    """ 改进方案：预判加速 + 姿态引导 """
         if not self.check_BarrierTrack_terrain(): return self._get_safe_zeros()
-        if not hasattr(self, "volume_sample_points"): return self._get_safe_zeros()
-        self.refresh_volume_sample_points()
+        
+        # 1. 获取感知掩码
+        # 建议扩大 volume_sample_points 的前向探测范围，让它在离坑还有 0.5m 时就开始拿奖
         engaging_obstacle_types = self.terrain.get_engaging_block_types(
             self.root_states[:, :3],
-            self.volume_sample_points - self.root_states[:, :3].unsqueeze(-2), # (n_envs, n_points, 3)
+            self.volume_sample_points - self.root_states[:, :3].unsqueeze(-2),
         )
         engaging_mask = (engaging_obstacle_types == self.terrain.track_options_id_dict["leap"])
-        # 在gap前加速
-        return torch.clip(self.base_lin_vel[:, 0], max= 2.0) * engaging_mask
+        
+        # 2. 计算速度奖励 (取消过低的 clip，或提高到 3.0+)
+        # 只有当前进方向确实指向 Gap 时才奖励速度
+        vel_x_reward = torch.clip(self.base_lin_vel[:, 0], min=0.0, max=3.0)
+        
+        # 3. 核心改进：加入“俯身” (Low Height) 和 “抬头” (Upward Pitch) 逻辑
+        # 俯身可以降低重心，增加起跳瞬间的爆发行程
+        base_height = self.root_states[:, 2] - self.measured_heights # 相对地面高度
+        height_reward = torch.exp(-torch.abs(base_height - 0.25) / 0.1) # 引导重心压到 0.25m
+        
+        # 4. 组合奖励
+        # 只有在检测到 leap 障碍时，同时满足速度和低重心才给高分
+        return vel_x_reward * height_reward * engaging_mask
 
 
 class LeggedRobotField(LeggedRobotFieldMixin, LeggedRobot):
