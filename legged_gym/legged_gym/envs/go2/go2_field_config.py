@@ -46,7 +46,7 @@ class Go2FieldCfg( Go2RoughCfg ):
             ),
             leap= dict(
                 length= [0.1, 0.5],
-                depth= [0.5, 0.8],
+                depth= [0.3, 0.5],
                 height= 0.2, # expected leap height over the gap
                 # fake_offset= 0.1,
             ),
@@ -180,19 +180,20 @@ class Go2FieldCfg( Go2RoughCfg ):
             # penetration penalty
             penetrate_depth = -0.001
             #add
-            leap_bonous_cond = 6.0
+            leap_bonous_cond = 1.0
             powers = -1e-7
             
             jump_x_vel_cond = 0.5 #这个奖励函数是为了鼓励机器人在跳跃障碍时，具有一定的前进速度并且有一个适当的俯仰角（pitch）。
             sync_legs_cond = 0.5#跳跃时，强制机器人前后腿同步运动
             dof_error_cond = -1#惩罚机器人在未接触障碍物时的关节误差
             
-            action_rate = -1 # 惩罚动作变化率过大
+            action_rate = -0.1 # 惩罚动作变化率过大
             action_smoothness = -0.01
             feet_air_time = 0.5 # 奖励足部离地时间，鼓励跳跃动作
             leap_x_vel_cond = 1.0
             
             hip_pos = -1.  
+            leap_pit_exploration=1.0
         tracking_sigma = 0.35
         soft_dof_pos_limit = 0.7
 
@@ -214,7 +215,7 @@ class Go2FieldCfgPPO( Go2RoughCfgPPO ):
 
         resume = True
         load_run = osp.join(logs_root, "field_go2",
-            "3.16很不错，但是宽一点的坑还是不跳",
+            "其它项目是目前最好的，但是在坑面前不动",
         )
 
         run_name = "".join(["Go2_",
