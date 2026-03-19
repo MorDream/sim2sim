@@ -65,3 +65,6 @@ __pycache__*.pt
 !legged_gym/logs/field_go2/其它项目是目前最好的，但是在坑面前不动/model_58000.pt
 !/root/mym/parkour-main/legged_gym/logs/field_go2/3.16很不错，但是宽一点的坑还是不跳/model_57000.pt
 !legged_gym/logs
+!legged_gym/logs/field_go2/3.16还不错/model_67000.pt
+!legged_gym/logs/field_go2/3.17动作比“还不错”稍微好看点，仍然有抽搐出现，宽坑不跳
+!legged_gym/logs/field_go2/很差，会瘫倒/model_72000.pt
