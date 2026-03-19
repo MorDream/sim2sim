@@ -222,6 +222,6 @@ class Go2FieldCfgPPO( Go2RoughCfgPPO ):
             ("{:d}skills".format(len(Go2FieldCfg.terrain.BarrierTrack_kwargs["options"])))
         ])
 
-        max_iterations = 1000
-        save_interval = 1000
+        max_iterations = 2000
+        save_interval = 200
         log_interval = 100
