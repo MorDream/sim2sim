@@ -45,7 +45,7 @@ class Go2FieldCfg( Go2RoughCfg ):
                 # fake_offset= 0.1,
             ),
             leap= dict(
-                length= [0.1, 0.5],
+                length= [0.1, 0.7],
                 depth= [0.3, 0.5],
                 height= 0.2, # expected leap height over the gap
                 # fake_offset= 0.1,

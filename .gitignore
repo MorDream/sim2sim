@@ -70,3 +70,4 @@ __pycache__*.pt
 !legged_gym/logs/field_go2/很差，会瘫倒/model_72000.pt
 !legged_gym/logs/rough_go2/Mar12_06-30-27_Go2Rough
 !legged_gym/logs/rough_go2/Mar12_06-30-27_Go2Rough/model_41000.pt
+!legged_gym/logs/field_go2/开源参数，基线
