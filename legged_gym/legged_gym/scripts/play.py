@@ -135,7 +135,7 @@ def play(args):
     # override some parameters for testing
     if env_cfg.terrain.selected == "BarrierTrack":
         env_cfg.env.num_envs = min(env_cfg.env.num_envs, 1)
-    # env_cfg.commands.is_goal_based = False   # ← 加这一行，play 时手动控制指令
+    env_cfg.commands.is_goal_based = False   # ← 加这一行，play 时手动控制指令
     #=======================add=======================
 
 

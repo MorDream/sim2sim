@@ -22,6 +22,11 @@ try:
 except Exception:
     pygame = None
 
+try:
+    import keyboard
+except Exception:
+    keyboard = None
+
 
 CURRENT_FILE = Path(__file__).resolve()
 LEGGED_GYM_ROOT_DIR = CURRENT_FILE.parents[2]
@@ -161,6 +166,38 @@ def read_xbox_command(joystick, max_cmd: np.ndarray) -> np.ndarray:
     cmd_y = -lx * max_cmd[1]
     cmd_yaw = -rx * max_cmd[2]
     return np.array([cmd_x, cmd_y, cmd_yaw], dtype=np.float32)
+
+
+def read_keyboard_command(current_cmd: np.ndarray, max_cmd: np.ndarray) -> np.ndarray:
+    """Handle keyboard input for robot control.
+    
+    Controls:
+    - Space: Set command to [0, 0, 0] (stop robot)
+    - Up Arrow: Increase forward velocity by 0.4
+    - Down Arrow: Decrease forward velocity by 0.4
+    - Left Arrow: Decrease yaw velocity (turn left)
+    - Right Arrow: Increase yaw velocity (turn right)
+    """
+    cmd = current_cmd.copy()
+    
+    if keyboard is not None:
+        # Space key - stop robot
+        if keyboard.is_pressed('space'):
+            cmd = np.array([0.0, 0.0, 0.0], dtype=np.float32)
+        else:
+            # Up/Down arrows - control forward velocity
+            if keyboard.is_pressed('up'):
+                cmd[0] = min(cmd[0] + 0.4, max_cmd[0])
+            elif keyboard.is_pressed('down'):
+                cmd[0] = max(cmd[0] - 0.4, -max_cmd[0])
+            
+            # Left/Right arrows - control yaw velocity
+            if keyboard.is_pressed('left'):
+                cmd[2] = max(cmd[2] - 0.4, -max_cmd[2])
+            elif keyboard.is_pressed('right'):
+                cmd[2] = min(cmd[2] + 0.4, max_cmd[2])
+    
+    return cmd
 
 
 class HeightMeasurementSampler:
@@ -602,8 +639,13 @@ class MujocoSim2SimEvalJit:
         viewer.cam.elevation = -20.0
         viewer.cam.azimuth = 60.0
 
-    def run(self, enable_joystick: bool = False) -> None:
+    def run(self, enable_joystick: bool = False, enable_keyboard: bool = False) -> None:
         joystick = try_init_joystick(enable_joystick)
+        
+        # Initialize keyboard control
+        if enable_keyboard and keyboard is None:
+            print("[Info] keyboard library not available, keyboard control disabled.")
+            enable_keyboard = False
 
         writer = None
         frame_skip = 1
@@ -635,8 +677,11 @@ class MujocoSim2SimEvalJit:
                 step_wall_time = time.time()
 
                 if sim_step % self.control_decimation == 0:
+                    # Handle input sources with priority: joystick > keyboard > fixed
                     if joystick is not None:
                         self.cmd = read_xbox_command(joystick, self.max_cmd)
+                    elif enable_keyboard:
+                        self.cmd = read_keyboard_command(self.cmd, self.max_cmd)
                     self._run_policy()
 
                     if step_wall_time - last_status_time > 0.1:
@@ -678,6 +723,8 @@ class MujocoSim2SimEvalJit:
             print("[Info] Video saved.")
         if pygame is not None and joystick is not None:
             pygame.quit()
+        if keyboard is not None and enable_keyboard:
+            keyboard.unhook_all()
 
 
 def parse_args():
@@ -687,6 +734,7 @@ def parse_args():
     parser.add_argument("--xml-path", type=str, default=None, help="Override xml_path from YAML.")
     parser.add_argument("--duration", type=float, default=None, help="Override simulation_duration from YAML.")
     parser.add_argument("--joystick", action="store_true", help="Enable optional joystick command input.")
+    parser.add_argument("--keyboard", action="store_true", help="Enable keyboard command input.")
     parser.add_argument("--save-video", action="store_true", help="Record evaluation video.")
     parser.add_argument("--video-path", type=str, default=None, help="Optional output video path.")
     return parser.parse_args()
@@ -702,7 +750,7 @@ def main():
         save_video=args.save_video,
         video_path=Path(args.video_path).resolve() if args.video_path else None,
     )
-    evaluator.run(enable_joystick=args.joystick)
+    evaluator.run(enable_joystick=args.joystick, enable_keyboard=args.keyboard)
 
 
 if __name__ == "__main__":

@@ -769,6 +769,63 @@ class LeggedRobotFieldMixin:
         
         # 返回维度应为 (6096,)
         return vel_x_reward * height_reward * engaging_mask.float()
+    
+    #==================add========================
+    def _reward_feet_air_time_mask(self):
+        """
+        改进后的足部腾空奖励：
+        1. 在平地：奖励适度的步幅，但惩罚过高的蹦跳。
+        2. 在坑边：鼓励长时间腾空以跨越深坑。
+        """
+        # --- 1. 基础触地逻辑计算 ---
+        # 探测当前和上一帧的足部压力，滤除物理引擎噪声
+        last_contact = self.last_contact_forces[:, self.feet_indices, 2] > 1.
+        contact = self.contact_forces[:, self.feet_indices, 2] > 1.
+        contact_filt = torch.logical_or(contact, last_contact)
+        
+        # 识别“刚刚落地”的时刻
+        first_contact = (self.feet_air_time > 0.) * contact_filt
+        self.feet_air_time += self.dt # 累积腾空时间
+        
+        # --- 2. 引入地形感知 Mask ---
+        # 获取采样点相对于机身的偏移
+        sample_points_offset = self.volume_sample_points - self.root_states[:, :3].unsqueeze(-2)
+        # 检测机器人下方的地形类型
+        engaging_types = self.terrain.get_engaging_block_types(
+            self.root_states[:, :3], 
+            sample_points_offset
+        )
+        # 判断是否处于深坑 (leap) 区域：只要周围采样点有 leap 类型，mask 就为 True
+        is_leap_area = (engaging_types == self.terrain.track_options_id_dict["leap"]).any(dim=-1)
+        
+        # --- 3. 计算不同场景下的奖励 ---
+        
+        # A. 基础腾空奖励 (Base Air Time)
+        # 只有超过 0.3s 才开始奖励
+        base_rew = torch.clip(self.feet_air_time - 0.3, min=0.)
+        
+        # B. 平地逻辑 (Flat Ground)
+        # 限制单次落地的最高奖励 (例如 0.5)，防止通过极高跳跃来刷分
+        # 同时增加对过长腾空（比如 > 0.6s）的惩罚，抑制蹦跳趋势
+        flat_rew = torch.clip(base_rew, max=0.5) 
+        flat_penalty = torch.where(self.feet_air_time > 0.6, -2.0, 0.0) # 过高跳跃惩罚
+        
+        # C. 跳跃区逻辑 (Leap Area)
+        # 在坑边不设置上限，并且翻倍奖励，鼓励爆发式跳跃
+        leap_rew = base_rew * 2.0 
+        
+        # --- 4. 组合最终奖励 ---
+        # 根据 is_leap_area 切换逻辑
+        selected_rew = torch.where(is_leap_area, leap_rew, flat_rew + flat_penalty)
+        
+        # 只在落地那一瞬间结算奖励，且只在有移动指令时结算
+        rew_airTime = torch.sum(selected_rew * first_contact, dim=1)
+        rew_airTime *= torch.norm(self.commands[:, :2], dim=1) > 0.1
+        
+        # --- 5. 状态重置 ---
+        self.feet_air_time *= ~contact_filt
+        
+        return rew_airTime
 
 
 class LeggedRobotField(LeggedRobotFieldMixin, LeggedRobot):

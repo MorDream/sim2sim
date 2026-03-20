@@ -46,7 +46,7 @@ class Go2FieldCfg( Go2RoughCfg ):
             ),
             leap= dict(
                 length= [0.1, 0.7],
-                depth= [0.3, 0.5],
+                depth= [0.5, 0.7],
                 height= 0.2, # expected leap height over the gap
                 # fake_offset= 0.1,
             ),
@@ -164,36 +164,67 @@ class Go2FieldCfg( Go2RoughCfg ):
         timeout_at_finished = False
 
     class rewards( Go2RoughCfg.rewards ):
+        # class scales:
+        #     tracking_lin_vel = 4.
+        #     tracking_ang_vel = 1.
+        #     energy_substeps = -2e-7
+        #     torques = -1e-7
+        #     stand_still = -2.
+        #     dof_error_named = -2.
+        #     dof_error = -0.005
+        #     collision = -1e-4
+        #     lazy_stop = -1.
+        #     # penalty for hardware safety
+        #     exceed_dof_pos_limits = -0.1
+        #     exceed_torque_limits_l1norm = -0.1
+        #     # penetration penalty
+        #     penetrate_depth = -0.001
+        #     #add
+        #     leap_bonous_cond = 1.0
+        #     powers = -1e-7
+            
+        #     jump_x_vel_cond = 0.5 #这个奖励函数是为了鼓励机器人在跳跃障碍时，具有一定的前进速度并且有一个适当的俯仰角（pitch）。
+        #     sync_legs_cond = 0.5#跳跃时，强制机器人前后腿同步运动
+        #     dof_error_cond = -5#惩罚机器人在未接触障碍物时的关节误差
+            
+        #     action_rate = -0.1 # 惩罚动作变化率过大
+        #     action_smoothness = -0.01
+        #     feet_air_time = 1e-5 # 奖励足部离地时间，鼓励跳跃动作
+        #     leap_x_vel_cond = 1.0
+            
+        #     hip_pos = -1.  
+        #     leap_pit_exploration=1.0
         class scales:
-            tracking_lin_vel = 4.
-            tracking_ang_vel = 1.
-            energy_substeps = -2e-7
-            torques = -1e-7
-            stand_still = -2.
-            dof_error_named = -2.
-            dof_error = -0.005
-            collision = -1e-4
-            lazy_stop = -1.
-            # penalty for hardware safety
-            exceed_dof_pos_limits = -0.1
-            exceed_torque_limits_l1norm = -0.1
-            # penetration penalty
-            penetrate_depth = -0.001
-            #add
-            leap_bonous_cond = 1.0
-            powers = -1e-7
+            # --- 基础行走约束（增强平地稳定性） ---
+            tracking_lin_vel = 5.0
+            tracking_ang_vel = 1.0
+            # 增加平地足部接触惩罚（可选），如果不在坑边，鼓励四足轮流接触地面（Gait）
+            # reference: 降低 feet_air_time 在平地的权重
+            feet_air_time_mask = 0.1  # 显著降低，或者只在交互时给这个奖励
+
+            # --- 跳跃核心奖励（必须是条件触发） ---
+            # 1. 只有在坑附近（engaging）才给前进速度奖励
+            leap_x_vel_cond = 5.0  # 提高权重，给足冲刺动力
             
-            jump_x_vel_cond = 0.5 #这个奖励函数是为了鼓励机器人在跳跃障碍时，具有一定的前进速度并且有一个适当的俯仰角（pitch）。
-            sync_legs_cond = 0.5#跳跃时，强制机器人前后腿同步运动
-            dof_error_cond = -1#惩罚机器人在未接触障碍物时的关节误差
+            # 2. 修正跳跃姿态：跳跃时需要的是爆发力
+            # 建议添加一个基于高度变化的奖励，仅在坑边触发
+            # jump_up_vel_cond = 1.0 
+
+            # --- 惩罚项调整 ---
+            # 关键：加大平地的 dof_error_cond 惩罚
+            dof_error_cond = -10.0 # 强制平地必须走得像正常的狗
             
-            action_rate = -0.1 # 惩罚动作变化率过大
-            action_smoothness = -0.01
-            feet_air_time = 0.5 # 奖励足部离地时间，鼓励跳跃动作
-            leap_x_vel_cond = 1.0
+            # 动作平滑性：蹦跳通常伴随剧烈的 action 变化
+            action_rate = -0.05 
+            action_smoothness = -0.02
             
-            hip_pos = -1.  
-            leap_pit_exploration=1.0
+            # --- 解决跳不过去的问题：碰撞与穿透 ---
+            # 如果它经常掉进坑里，可能是因为掉进去后的惩罚不够重，或者掉进去后任务没结束
+            collision = -1.0 # 加大碰撞惩罚
+            penetrate_depth = 5.0 # 严厉惩罚身体部位进入坑内
+            
+            lazy_stop = -0.1
+        
         tracking_sigma = 0.35
         soft_dof_pos_limit = 0.7
 
@@ -215,13 +246,13 @@ class Go2FieldCfgPPO( Go2RoughCfgPPO ):
 
         resume = True
         load_run = osp.join(logs_root, "field_go2",
-            "其它项目是目前最好的，但是在坑面前不动",
+            "其它项目是目前最好的，但是在坑面前不动，基线2",
         )
 
         run_name = "".join(["Go2_",
             ("{:d}skills".format(len(Go2FieldCfg.terrain.BarrierTrack_kwargs["options"])))
         ])
 
-        max_iterations = 2000
+        max_iterations = 1000
         save_interval = 200
         log_interval = 100
