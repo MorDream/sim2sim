@@ -16,13 +16,6 @@ class LeggedRobotFieldMixin:
         print("Using LeggedRobotField.__init__, num_obs and num_privileged_obs will be computed instead of assigned.")
         super().__init__(cfg, sim_params, physics_engine, sim_device, headless)
         
-    def _get_safe_zeros(self):
-        """ Helper method to safely create zero tensor during initialization """
-        if hasattr(self, 'root_states') and self.root_states is not None:
-            return torch.zeros_like(self.root_states[:, 0])
-        else:
-            return torch.zeros(self.num_envs, device=getattr(self, 'device', 'cpu'))
-        
     def check_BarrierTrack_terrain(self):
         if getattr(self.cfg.terrain, "pad_unavailable_info", False):
             return self.cfg.terrain.selected == "BarrierTrack"
@@ -508,69 +501,24 @@ class LeggedRobotFieldMixin:
         return torch.abs(yaw)
 
     def _reward_penetrate_depth(self):
-        # 1. 原有的穿透惩罚逻辑
-        # 假设你的 pen_depth 计算如下：
-        pen_depth = torch.sum(torch.clip(self.contact_forces[:, self.feet_indices, 2] - self.cfg.rewards.max_contact_force, min=0.), dim=1)
-        raw_penalty = -torch.square(pen_depth)
+        if not self.check_BarrierTrack_terrain(): return torch.zeros_like(self.root_states[:, 0])
+        self.refresh_volume_sample_points()
+        penetration_depths = self.terrain.get_penetration_depths(self.volume_sample_points.view(-1, 3)).view(self.num_envs, -1)
+        penetration_depths *= torch.norm(self.volume_sample_points_vel, dim= -1) + 1e-3
+        return torch.sum(penetration_depths, dim= -1)
 
-        # 2. 识别是否在 Leap 区域（修复这里！）
-        # 不要传入 ...，要传入具体的采样点偏移量
-        sample_points_offset = self.volume_sample_points - self.root_states[:, :3].unsqueeze(-2)
-        
-        engaging_types = self.terrain.get_engaging_block_types(
-            self.root_states[:, :3], 
-            sample_points_offset
-        )
-        
-        # 3. 降维处理：只要有一个采样点扫到了 leap，就认为处于该区域
-        is_leap = (engaging_types == self.terrain.track_options_id_dict["leap"]).any(dim=-1)
-        
-        # 4. 应用弱化权重（如果在深坑区域，惩罚减弱）
-        penalty_scale = torch.where(is_leap, 0.1, 1.0)
-        
-        return raw_penalty * penalty_scale
-
-    
     def _reward_penetrate_volume(self):
-        if not self.check_BarrierTrack_terrain(): return self._get_safe_zeros()
+        if not self.check_BarrierTrack_terrain(): return torch.zeros_like(self.root_states[:, 0])
         self.refresh_volume_sample_points()
         penetration_mask = self.terrain.get_penetration_mask(self.volume_sample_points.view(-1, 3)).view(self.num_envs, -1)
         penetration_mask *= torch.norm(self.volume_sample_points_vel, dim= -1) + 1e-3
         return torch.sum(penetration_mask, dim= -1)
-    
-    
-    def _reward_leap_pit_exploration(self):
-        if not self.check_BarrierTrack_terrain(): return self._get_safe_zeros()
-        
-        # 修正 1：处理高度图维度
-        # self.measured_heights 形状为 (6096, 231)
-        mean_height = torch.mean(self.measured_heights, dim=1) 
-        base_height_rel = self.root_states[:, 2] - mean_height 
-        
-        # 修正 2：处理掩码维度
-        engaging_types = self.terrain.get_engaging_block_types(
-            self.root_states[:, :3],
-            self.volume_sample_points - self.root_states[:, :3].unsqueeze(-2),
-        )
-        # engaging_types 是 (num_envs, n_points)，通过 any 降维到 (num_envs,)
-        is_leap = (engaging_types == self.terrain.track_options_id_dict["leap"]).any(dim=-1)
-        
-        # 只有处于 leap 区域且重心显著下降（掉进深坑）时触发
-        in_pit_mask = is_leap & (base_height_rel < -0.1)
-        
-        # 奖励在坑底的 x 轴速度 (鼓励挣扎)
-        exploration_vel_reward = torch.clip(self.base_lin_vel[:, 0], min=0.0, max=1.0)
-        
-        return exploration_vel_reward * in_pit_mask.float()
-    
-    
-    
 
     def _reward_tilt_cond(self):
         """ Conditioned reward term in terms of whether the robot is engaging the tilt obstacle
         Use positive factor to enable rolling angle when incountering tilt obstacle
         """
-        if not self.check_BarrierTrack_terrain(): return self._get_safe_zeros()
+        if not self.check_BarrierTrack_terrain(): return torch.zeros_like(self.root_states[:, 0])
         roll, pitch, yaw = get_euler_xyz(self.root_states[:, 3:7])
         pi = torch.acos(torch.zeros(1)).item() * 2 # which is 3.1415927410125732
         roll[roll > pi] -= pi * 2 # to range (-pi, pi)
@@ -599,8 +547,8 @@ class LeggedRobotFieldMixin:
         return torch.sum(torch.square(self.dof_pos[:, self.rear_hip_indices] - self.default_dof_pos[:, self.rear_hip_indices]), dim=1)
     
     def _reward_down_cond(self):
-        if not self.check_BarrierTrack_terrain(): return self._get_safe_zeros()
-        if not hasattr(self, "volume_sample_points"): return self._get_safe_zeros()
+        if not self.check_BarrierTrack_terrain(): return torch.zeros_like(self.root_states[:, 0])
+        if not hasattr(self, "volume_sample_points"): return torch.zeros_like(self.root_states[:, 0])
         self.refresh_volume_sample_points()
         engaging_obstacle_types = self.terrain.get_engaging_block_types(
             self.root_states[:, :3],
@@ -620,8 +568,8 @@ class LeggedRobotFieldMixin:
         return torch.exp(-pitch_err/self.cfg.rewards.tracking_sigma) * engaging_mask # the higher positive factor, the more you want the robot to pitch down 0.2 rad
 
     def _reward_jump_x_vel_cond(self):
-        if not self.check_BarrierTrack_terrain(): return self._get_safe_zeros()
-        if not hasattr(self, "volume_sample_points"): return self._get_safe_zeros()
+        if not self.check_BarrierTrack_terrain(): return torch.zeros_like(self.root_states[:, 0])
+        if not hasattr(self, "volume_sample_points"): return torch.zeros_like(self.root_states[:, 0])
         self.refresh_volume_sample_points()
         engaging_obstacle_types = self.terrain.get_engaging_block_types(
             self.root_states[:, :3],
@@ -638,8 +586,8 @@ class LeggedRobotFieldMixin:
 
     def _reward_sync_legs_cond(self):
         """ A hack to force same actuation on both rear legs when jump. """
-        if not self.check_BarrierTrack_terrain(): return self._get_safe_zeros()
-        if not hasattr(self, "volume_sample_points"): return self._get_safe_zeros()
+        if not self.check_BarrierTrack_terrain(): return torch.zeros_like(self.root_states[:, 0])
+        if not hasattr(self, "volume_sample_points"): return torch.zeros_like(self.root_states[:, 0])
         self.refresh_volume_sample_points()
         engaging_obstacle_types = self.terrain.get_engaging_block_types(
             self.root_states[:, :3],
@@ -653,8 +601,8 @@ class LeggedRobotFieldMixin:
     
     def _reward_sync_all_legs_cond(self):
         """ A hack to force same actuation on both front/rear legs when jump. """
-        if not self.check_BarrierTrack_terrain(): return self._get_safe_zeros()
-        if not hasattr(self, "volume_sample_points"): return self._get_safe_zeros()
+        if not self.check_BarrierTrack_terrain(): return torch.zeros_like(self.root_states[:, 0])
+        if not hasattr(self, "volume_sample_points"): return torch.zeros_like(self.root_states[:, 0])
         self.refresh_volume_sample_points()
         engaging_obstacle_types = self.terrain.get_engaging_block_types(
             self.root_states[:, :3],
@@ -688,8 +636,8 @@ class LeggedRobotFieldMixin:
     
     def _reward_dof_error_cond(self):
         """ Force dof error when not engaging obstacle """
-        if not self.check_BarrierTrack_terrain(): return self._get_safe_zeros()
-        if not hasattr(self, "volume_sample_points"): return self._get_safe_zeros()
+        if not self.check_BarrierTrack_terrain(): return torch.zeros_like(self.root_states[:, 0])
+        if not hasattr(self, "volume_sample_points"): return torch.zeros_like(self.root_states[:, 0])
         self.refresh_volume_sample_points()
         engaging_obstacle_types = self.terrain.get_engaging_block_types(
             self.root_states[:, :3],
@@ -699,134 +647,23 @@ class LeggedRobotFieldMixin:
         return torch.sum(torch.square(self.dof_pos - self.default_dof_pos), dim=1) * not_engaging_mask
         
     def _reward_leap_bonous_cond(self):
-        """ 阶梯式奖励：根据跨越深度给予不同权重的补偿与奖励 """
-        if not self.check_BarrierTrack_terrain(): return self._get_safe_zeros()
-        if not hasattr(self, "volume_sample_points"): return self._get_safe_zeros()
-        
+        """ counteract the tracking reward loss during leap"""
+        if not self.check_BarrierTrack_terrain(): return torch.zeros_like(self.root_states[:, 0])
+        if not hasattr(self, "volume_sample_points"): return torch.zeros_like(self.root_states[:, 0])
         self.refresh_volume_sample_points()
-        # 获取采样点相对于障碍物的距离（假设正值代表已进入或越过坑的区域）
-        engaging_dist = self.terrain.get_engaging_block_distance(
+        engaging_obstacle_distance = self.terrain.get_engaging_block_distance(
             self.root_states[:, :3],
-            self.volume_sample_points - self.root_states[:, :3].unsqueeze(-2),
+            self.volume_sample_points - self.root_states[:, :3].unsqueeze(-2), # (n_envs, n_points, 3)
         )
-        engaging_types = self.terrain.get_engaging_block_types(
-            self.root_states[:, :3],
-            self.volume_sample_points - self.root_states[:, :3].unsqueeze(-2),
-        )
-        
-        # 基础掩码：确定是在 Leap 任务中
-        leap_id = self.terrain.track_options_id_dict["leap"]
-        engaging_mask = (engaging_types == leap_id) & (engaging_dist > 0.)
-
-        # 1. 保留你原有的速度补偿逻辑 (防止在坑边减速被扣分)
-        world_vel_error = torch.sum(torch.square(self.commands[:, :2] - self.root_states[:, 7:9]), dim=1)
-        tracking_compensation = (1 - torch.exp(-world_vel_error / self.cfg.rewards.tracking_sigma))
-        
-        # 2. 核心修改：定义阶梯进度 (Progress)
-        # 通过 engaging_dist 的平均值或最大值来判断跨越深度
-        # 假设 dist 随跨越距离增加而增大
-        progress = torch.mean(engaging_dist * (engaging_types == leap_id).float(), dim=-1)
-        
-        # 定义三个阶段的权重 (20%, 50%, 100%)
-        # 这里的阈值需根据你 BarrierTrack 的具体 Gap 宽度调整，假设宽度为 0.8m
-        stage_1 = torch.clamp(progress / 0.2, 0.0, 1.0) * 0.2  # 前腿入坑/跨过前沿
-        stage_2 = torch.clamp(progress / 0.5, 0.0, 1.0) * 0.3  # 质心深入
-        stage_3 = torch.clamp(progress / 0.8, 0.0, 1.0) * 0.5  # 完全跨越
-        
-        leap_progress_weight = stage_1 + stage_2 + stage_3
-
-        # 3. 组合输出
-        # 总奖励 = (基础补偿 + 进度奖励) * 掩码
-        # 增加一个基础项 1.0，确保只要在跨越就有收益，而不只是补偿误差
-        total_reward = (tracking_compensation + leap_progress_weight + 0.5) * engaging_mask
-    
-        return total_reward
-    
-    def _reward_leap_x_vel_cond(self):
-        """ 修复维度后的加速+俯身奖励 """
-        if not self.check_BarrierTrack_terrain(): return self._get_safe_zeros()
-        if not hasattr(self, "volume_sample_points"): return self._get_safe_zeros()
-        
-        self.refresh_volume_sample_points()
         engaging_obstacle_types = self.terrain.get_engaging_block_types(
             self.root_states[:, :3],
-            self.volume_sample_points - self.root_states[:, :3].unsqueeze(-2),
+            self.volume_sample_points - self.root_states[:, :3].unsqueeze(-2), # (n_envs, n_points, 3)
         )
-        
-        # 1. 确保掩码是 (num_envs,) 维度
-        # 判断该环境下的采样点中是否包含 leap 类型
-        engaging_mask = (engaging_obstacle_types == self.terrain.track_options_id_dict["leap"]).any(dim=-1)
-        
-        # 2. 修复高度计算维度
-        mean_h = torch.mean(self.measured_heights, dim=1)
-        base_height = self.root_states[:, 2] - mean_h
-        
-        # 3. 计算俯身奖励 (假设目标高度 0.25m)
-        height_reward = torch.exp(-torch.abs(base_height - 0.25) / 0.1)
-        
-        # 4. 计算速度奖励
-        vel_x_reward = torch.clip(self.base_lin_vel[:, 0], min=0.0, max=3.0)
-        
-        # 返回维度应为 (6096,)
-        return vel_x_reward * height_reward * engaging_mask.float()
-    
-    #==================add========================
-    def _reward_feet_air_time_mask(self):
-        """
-        改进后的足部腾空奖励：
-        1. 在平地：奖励适度的步幅，但惩罚过高的蹦跳。
-        2. 在坑边：鼓励长时间腾空以跨越深坑。
-        """
-        # --- 1. 基础触地逻辑计算 ---
-        # 探测当前和上一帧的足部压力，滤除物理引擎噪声
-        last_contact = self.last_contact_forces[:, self.feet_indices, 2] > 1.
-        contact = self.contact_forces[:, self.feet_indices, 2] > 1.
-        contact_filt = torch.logical_or(contact, last_contact)
-        
-        # 识别“刚刚落地”的时刻
-        first_contact = (self.feet_air_time > 0.) * contact_filt
-        self.feet_air_time += self.dt # 累积腾空时间
-        
-        # --- 2. 引入地形感知 Mask ---
-        # 获取采样点相对于机身的偏移
-        sample_points_offset = self.volume_sample_points - self.root_states[:, :3].unsqueeze(-2)
-        # 检测机器人下方的地形类型
-        engaging_types = self.terrain.get_engaging_block_types(
-            self.root_states[:, :3], 
-            sample_points_offset
-        )
-        # 判断是否处于深坑 (leap) 区域：只要周围采样点有 leap 类型，mask 就为 True
-        is_leap_area = (engaging_types == self.terrain.track_options_id_dict["leap"]).any(dim=-1)
-        
-        # --- 3. 计算不同场景下的奖励 ---
-        
-        # A. 基础腾空奖励 (Base Air Time)
-        # 只有超过 0.3s 才开始奖励
-        base_rew = torch.clip(self.feet_air_time - 0.3, min=0.)
-        
-        # B. 平地逻辑 (Flat Ground)
-        # 限制单次落地的最高奖励 (例如 0.5)，防止通过极高跳跃来刷分
-        # 同时增加对过长腾空（比如 > 0.6s）的惩罚，抑制蹦跳趋势
-        flat_rew = torch.clip(base_rew, max=0.5) 
-        flat_penalty = torch.where(self.feet_air_time > 0.6, -2.0, 0.0) # 过高跳跃惩罚
-        
-        # C. 跳跃区逻辑 (Leap Area)
-        # 在坑边不设置上限，并且翻倍奖励，鼓励爆发式跳跃
-        leap_rew = base_rew * 2.0 
-        
-        # --- 4. 组合最终奖励 ---
-        # 根据 is_leap_area 切换逻辑
-        selected_rew = torch.where(is_leap_area, leap_rew, flat_rew + flat_penalty)
-        
-        # 只在落地那一瞬间结算奖励，且只在有移动指令时结算
-        rew_airTime = torch.sum(selected_rew * first_contact, dim=1)
-        rew_airTime *= torch.norm(self.commands[:, :2], dim=1) > 0.1
-        
-        # --- 5. 状态重置 ---
-        self.feet_air_time *= ~contact_filt
-        
-        return rew_airTime
+        engaging_mask = (engaging_obstacle_types == self.terrain.track_options_id_dict["leap"]) \
+            & (engaging_obstacle_distance > 0.)
 
+        world_vel_error = torch.sum(torch.square(self.commands[:, :2] - self.root_states[:, 7:9]), dim= 1)
+        return (1 - torch.exp(-world_vel_error/self.cfg.rewards.tracking_sigma)) * engaging_mask # reverse version of tracking reward
 
 class LeggedRobotField(LeggedRobotFieldMixin, LeggedRobot):
     pass
