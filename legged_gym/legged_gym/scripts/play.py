@@ -490,7 +490,7 @@ def play(args):
             start_time = time.time_ns()
 
 if __name__ == '__main__':
-    EXPORT_POLICY = False
+    EXPORT_POLICY = True
     args = get_args([
         dict(name= "--slow", type= float, default= 0., help= "slow down the simulation by sleep secs (float) every frame"),
         dict(name= "--show_teacher", action= "store_true", default= False, help= "show teacher actions"),
