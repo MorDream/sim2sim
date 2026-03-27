@@ -72,3 +72,5 @@ __pycache__*.pt
 # !legged_gym/logs/rough_go2/Mar12_06-30-27_Go2Rough/model_41000.pt
 !legged_gym/logs/field_go2/开源参数，基线1/model_51000.pt
 !legged_gym/logs/field_go2/其它项目是目前最好的，但是在坑面前不动，基线2/model_58000.pt
+!legged_gym/logs/distill_go2/并行计算服务器
+!legged_gym/logs/distill_go2/并行计算服务器/model_110000_v1.pt

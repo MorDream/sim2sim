@@ -196,15 +196,15 @@ class Go2FieldCfgPPO( Go2RoughCfgPPO ):
         experiment_name = "field_go2"
 
         resume = True
-        load_run = osp.join(logs_root, "rough_go2",
-            "Mar12_06-30-27_Go2Rough",
+        load_run = osp.join(logs_root, "field_go2",
+            "Mar20_04-48-42_Go2_10skills",
         )
 
         run_name = "".join(["Go2_",
             ("{:d}skills".format(len(Go2FieldCfg.terrain.BarrierTrack_kwargs["options"]))),
         ])
 
-        max_iterations = 2000
+        max_iterations = 5000
         save_interval = 500
         log_interval = 100
         
