@@ -178,6 +178,11 @@ class Go2FieldCfg( Go2RoughCfg ):
             exceed_torque_limits_l1norm = -0.1
             # penetration penalty
             penetrate_depth = -0.05
+            
+            #=================add=======================
+            action_rate = -0.5
+            action_smoothness = -0.1  # 改为正值，因为函数返回负error
+            powers = -2e-5
 
     class noise( Go2RoughCfg.noise ):
         add_noise = False
@@ -197,14 +202,14 @@ class Go2FieldCfgPPO( Go2RoughCfgPPO ):
 
         resume = True
         load_run = osp.join(logs_root, "field_go2",
-            "Mar20_04-48-42_Go2_10skills",
+            "Mar20_07-17-34_Go2_10skills",
         )
 
         run_name = "".join(["Go2_",
             ("{:d}skills".format(len(Go2FieldCfg.terrain.BarrierTrack_kwargs["options"]))),
         ])
 
-        max_iterations = 5000
+        max_iterations = 10000
         save_interval = 500
         log_interval = 100
         
