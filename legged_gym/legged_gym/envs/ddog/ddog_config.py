@@ -173,31 +173,35 @@ class DdogRoughCfg( LeggedRobotCfg ):
 
     class rewards( LeggedRobotCfg.rewards ):
         class scales:
-            action_rate = -0.01
-            action_smoothness = -0.01
-            ang_vel_xy = -0.1 
-            base_height = -10.0
-            collision = -1.0
-            dof_acc = -2.5e-7
-            feet_air_time = -2.0
-            feet_air_time_var = -8.0
-            feet_contact_forces = -0.00015
-            foot_clearance = -0.5
-            foot_mirror = -0.05
-            foot_slide = -0.05
-            has_contact = 1.0
-            hip_pos = -5.0
-            lin_vel_z = -4.0
-            orientation = -0.2
-            powers = -2e-5
-            stand_still = -1.0
-            stumble = -0.05
+            # action_rate = -0.01
+            # action_smoothness = -0.01
+            # ang_vel_xy = -0.1 
+            # base_height = -10.0
+            # collision = -1.0
+            # dof_acc = -2.5e-7
+            # feet_air_time = -2.0
+            # feet_air_time_var = -8.0
+            # feet_contact_forces = -0.00015
+            # foot_clearance = -0.5
+            # foot_mirror = -0.05
+            # foot_slide = -0.05
+            # has_contact = 1.0
+            # hip_pos = -5.0
+            # lin_vel_z = -4.0
+            # orientation = -0.2
+            # powers = -2e-5
+            stand_still = -2.0
+            # stumble = -0.05
             tracking_ang_vel = 1.0
             tracking_lin_vel = 2.0
 
             exceed_dof_pos_limits = -0.4
             exceed_torque_limits_l1norm = -0.4
             dof_vel_limits = -0.4
+
+            energy_substeps = -2e-5
+            dof_error_named = -1.
+            dof_error = -0.01
             
         dof_error_names = ["FL_hip_joint", "FR_hip_joint", "RL_hip_joint", "RR_hip_joint"]
         only_positive_rewards = False
