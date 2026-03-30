@@ -37,6 +37,7 @@ class Ddog2RoughCfg( LeggedRobotCfg ):
             "last_actions",#上一动作12
             "height_measurements",#高度测量21*11
         ]
+        history_len = 10
 
     class sensor:
         class proprioception:
@@ -76,7 +77,7 @@ class Ddog2RoughCfg( LeggedRobotCfg ):
         lin_cmd_cutoff = 0.2
         ang_cmd_cutoff = 0.2
         class ranges( LeggedRobotCfg.commands.ranges ):
-            lin_vel_x = [-1.0, 5.0]
+            lin_vel_x = [-1.0, 3.0]
             lin_vel_y = [-1., 1.]
             ang_vel_yaw = [-2., 2.]
 
@@ -168,29 +169,32 @@ class Ddog2RoughCfg( LeggedRobotCfg ):
 
     class rewards( LeggedRobotCfg.rewards ):
         class scales(LeggedRobotCfg.rewards.scales):
-            tracking_lin_vel = 2.
-            tracking_ang_vel = 1.
-            lin_vel_z = -4
-            ang_vel_xy =  -0.1
-            orientation = -0.2
-            torques = -0.00001
-            dof_vel = -0.
-            dof_acc = -2.5e-7
-            base_height = -1.0
-            feet_air_time = 2.0
-            collision = -1
-            stumble = -0.05
-            stand_still = -1.0
-            action_rate = -0.5
-            action_smoothness = -0.1  # 改为正值，因为函数返回负error
+            tracking_lin_vel = 2.          # 线速度跟踪奖励：鼓励机器人跟随命令的线速度
+            tracking_ang_vel = 1.          # 角速度跟踪奖励：鼓励机器人跟随命令的偏航角速度
+            lin_vel_z = -4                 # Z轴线速度惩罚：惩罚基座Z方向速度，鼓励保持水平运动
+            ang_vel_xy =  -0.1             # XY轴角速度惩罚：惩罚翻滚和俯仰，鼓励稳定姿态
+            orientation = -0.5             # 姿态惩罚：惩罚非水平基座，鼓励保持平衡
+            torques = -0.00001             # 扭矩惩罚：惩罚过大扭矩，鼓励节能
+            dof_vel = -0.                  # 关节速度惩罚：当前未使用，系数为0
+            dof_acc = -2.5e-7              # 关节加速度惩罚：惩罚大加速度，鼓励平滑运动
+            base_height = -1.0             # 基座高度惩罚：惩罚偏离目标高度，保持稳定行走高度
+            feet_air_time = 1.0            # 脚悬空时间奖励：鼓励脚在空中停留更长时间，走出更大步幅
+            collision = -1                 # 碰撞惩罚：惩罚身体非足部部位碰撞地面
+            stumble = -0.05                # 绊倒惩罚：惩罚脚撞击垂直表面
+            stand_still = -2.0             # 原地站立惩罚：零命令时惩罚关节偏离默认位置，鼓励站稳
+            action_rate = -0.1             # 动作变化率惩罚：惩罚前后步动作突变，鼓励平滑输出
+            action_smoothness = -0.1       # 动作平滑性惩罚：惩罚二阶差分，鼓励轨迹平滑
 
-            feet_contact_forces = -0.00015
-            foot_clearance = -0.5
-            foot_mirror = -0.05
-            foot_slide = -0.05
-            has_contact = 1.0
-            hip_pos = -5.0
-            powers = -2e-5
+            feet_contact_forces = -0.00015 # 接触力惩罚：惩罚过大足端接触力，避免硬冲击
+            foot_clearance = -0.5          # 脚间隙惩罚：惩罚脚抬高度偏离目标，鼓励适当抬脚
+            foot_mirror = -0.1            # 脚步镜像惩罚：惩罚左右腿不对称，鼓励对称步态
+            foot_slide = -0.05             # 脚滑动惩罚：惩罚接触脚水平滑动，鼓励脚踏实地
+            has_contact = 1.0              # 接触奖励：零命令时奖励更多脚着地，鼓励稳定站立
+            hip_pos = -5.0                 # 髋部位置惩罚：惩罚髋部偏离零位置，鼓励髋部保持中立
+            powers = -2e-5                 # 功率惩罚：惩罚总能量消耗，功率=|扭矩|×|角速度|
+            exceed_dof_pos_limits = -0.4   # 关节位置超限惩罚：统计超过位置限制的关节数量
+            exceed_torque_limits_l1norm = -0.4 # 超扭矩L1惩罚：对超过软极限的部分累加惩罚
+            dof_vel_limits = -0.4          # 关节速度超限惩罚：惩罚关节速度超过软极限
         
         dof_error_names = ["FL_hip_joint", "FR_hip_joint", "RL_hip_joint", "RR_hip_joint"]
         only_positive_rewards = False
@@ -281,10 +285,10 @@ class Ddog2RoughPPO( LeggedRobotCfgPPO ):
         experiment_name = "rough_ddog"
 
         resume = True
-        load_run = "/root/mym/parkour-main/legged_gym/logs/rough_ddog/Feb11_08-00-01_DdogRough_pEnergy-2e-05_pDofErr-1e-02_pDofErrN-1e+00_pStand-2e+00_fromFeb11_00-18-51"
+        load_run = "/root/mym/parkour-main/legged_gym/logs/rough_ddog/Mar27_05-51-00_DdogRough"
 
         run_name = "".join(["DdogRough"])
 
-        max_iterations = 1000
+        max_iterations = 10000
         save_interval = 200
         log_interval = 100

@@ -89,6 +89,14 @@
           </body>
         </body>
       </body>
+      
+      <!-- 添加相机 弧度制！！！！ 位置来自go2_distill_config.py -->
+      <body name="depth_camera" pos="0.24 -0.0175 0.12" euler="0 0.40 0">
+          <!-- 相对于这个body的位置和方向 不要更改-->
+          <camera name="depth_camera" pos="0. 0. 0." euler="0 -1.57 0" fovy="66"/>
+          <geom type="box" size="0.01 0.1 0.02" rgba="0. 1.0 0. 0.6" group="1"/>
+      </body>
+    
     </body>
   </worldbody>
 

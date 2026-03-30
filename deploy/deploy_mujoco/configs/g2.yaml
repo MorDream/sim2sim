@@ -5,7 +5,7 @@ xml_path: "scene.xml"
 # Total simulation time
 simulation_duration: 60.0
 # Simulation time step
-simulation_dt: 0.002
+simulation_dt: 0.005
 # Controller update frequency (meets the requirement of simulation_dt * controll_decimation=0.02; 50Hz)
 control_decimation: 4
 

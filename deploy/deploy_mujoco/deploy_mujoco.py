@@ -11,6 +11,8 @@ import mujoco.viewer
 import numpy as np
 import torch
 import yaml
+import glfw
+import cv2
 
 try:
     import imageio.v2 as imageio
@@ -391,6 +393,34 @@ class MujocoSim2SimEvalJit:
         self.video_path = video_path
         self.renderer = None
 
+        # Initialize depth camera rendering (offscreen)
+        # Resolution: 120x160 (height x width)
+        self.depth_camera_name = "depth_camera"
+        self.depth_resolution = (160, 120)  # (width, height)
+        self.depth_camera_id = mujoco.mj_name2id(self.mj_model, mujoco.mjtObj.mjOBJ_CAMERA, self.depth_camera_name)
+        if self.depth_camera_id != -1:
+            print(f"[Info] Found depth camera: {self.depth_camera_name}, camera_id = {self.depth_camera_id}")
+            # Create OpenGL context for offscreen rendering
+            glfw.init()
+            glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
+            self.depth_window = glfw.create_window(self.depth_resolution[0], self.depth_resolution[1], "DepthOffscreen", None, None)
+            glfw.make_context_current(self.depth_window)
+            # Create scene and context for depth rendering
+            self.depth_scene = mujoco.MjvScene(self.mj_model, maxgeom=10000)
+            self.depth_context = mujoco.MjrContext(self.mj_model, mujoco.mjtFontScale.mjFONTSCALE_150.value)
+            mujoco.mjr_setBuffer(mujoco.mjtFramebuffer.mjFB_OFFSCREEN, self.depth_context)
+            # Pre-allocate buffers
+            self.depth_rgb = np.zeros((self.depth_resolution[1], self.depth_resolution[0], 3), dtype=np.uint8)
+            self.depth_buffer = np.zeros((self.depth_resolution[1], self.depth_resolution[0], 1), dtype=np.float32)
+            self.depth_viewport = mujoco.MjrRect(0, 0, self.depth_resolution[0], self.depth_resolution[1])
+            # Setup fixed camera
+            self.depth_mj_camera = mujoco.MjvCamera()
+            self.depth_mj_camera.type = mujoco.mjtCamera.mjCAMERA_FIXED
+            self.depth_mj_camera.fixedcamid = self.depth_camera_id
+        else:
+            print(f"[Warn] Depth camera '{self.depth_camera_name}' not found in XML, depth capture disabled.")
+            self.depth_camera_id = -1
+
     def _build_joint_mappings(self) -> None:
         if len(self.mujoco_joint_names) != self.num_actions:
             raise ValueError("mujoco_joint_names length must equal num_actions")
@@ -709,6 +739,38 @@ class MujocoSim2SimEvalJit:
                 # Visualize terrain height points
                 self._visualize_height_points(viewer)
                 
+                # Capture depth image from camera if available
+                if self.depth_camera_id != -1:
+                    # Update scene from depth camera perspective
+                    mujoco.mjv_updateScene(
+                        self.mj_model, self.mj_data, mujoco.MjvOption(),
+                        None, self.depth_mj_camera,
+                        mujoco.mjtCatBit.mjCAT_ALL, self.depth_scene
+                    )
+                    # Render and read pixels
+                    mujoco.mjr_render(self.depth_viewport, self.depth_scene, self.depth_context)
+                    mujoco.mjr_readPixels(self.depth_rgb, self.depth_buffer, self.depth_viewport, self.depth_context)
+                    
+                    # Flip image vertically (OpenGL coordinates vs OpenCV)
+                    bgr = cv2.cvtColor(np.flipud(self.depth_rgb), cv2.COLOR_RGB2BGR)
+                    depth_image = np.flip(self.depth_buffer, axis=0).squeeze()
+                    
+                    # Normalize and display depth as grayscale
+                    if np.max(depth_image) > np.min(depth_image):
+                        depth_normalized = (depth_image - np.min(depth_image)) / (np.max(depth_image) - np.min(depth_image))
+                    else:
+                        depth_normalized = np.zeros_like(depth_image)
+                    depth_grayscale = np.uint8(depth_normalized * 255)
+                    
+                    # Display images
+                    cv2.imshow('Depth Camera RGB', bgr)
+                    cv2.imshow('Depth Camera Depth', depth_grayscale)
+                    
+                    # Check for ESC exit
+                    if cv2.waitKey(1) == 27:
+                        print("\n[Info] ESC pressed, exiting...")
+                        break
+                
                 viewer.sync()
 
                 sleep_time = self.mj_model.opt.timestep - (time.time() - step_wall_time)
@@ -725,6 +787,12 @@ class MujocoSim2SimEvalJit:
             pygame.quit()
         if keyboard is not None and enable_keyboard:
             keyboard.unhook_all()
+        # Clean up depth camera resources
+        if hasattr(self, 'depth_window'):
+            cv2.destroyAllWindows()
+            glfw.destroy_window(self.depth_window)
+            glfw.terminate()
+            del self.depth_context
 
 
 def parse_args():
