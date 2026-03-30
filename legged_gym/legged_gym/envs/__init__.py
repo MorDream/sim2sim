@@ -48,6 +48,7 @@ from .go2.go2_config import Go2RoughCfg, Go2RoughCfgPPO
 from .go2.go2_field_config import Go2FieldCfg, Go2FieldCfgPPO
 from .go2.go2_distill_config import Go2DistillCfg, Go2DistillCfgPPO
 from .ddog.ddog_config import DdogRoughCfg, DdogRoughCfgPPO
+from .ddog.ddog2_config import Ddog2Cfg, Ddog2CfgPPO
 
 
 import os
@@ -65,6 +66,7 @@ task_registry.register( "go2", LeggedRobot, Go2RoughCfg(), Go2RoughCfgPPO() )
 task_registry.register( "go2_field", RobotFieldNoisy, Go2FieldCfg(), Go2FieldCfgPPO() )
 task_registry.register( "go2_distill", RobotFieldNoisy, Go2DistillCfg(), Go2DistillCfgPPO() )
 task_registry.register( "ddog", LeggedRobot, DdogRoughCfg(), DdogRoughCfgPPO() )
+task_registry.register( "ddog2", RobotFieldNoisy, Ddog2Cfg(), Ddog2CfgPPO() )
 
 
 ## The following tasks are for the convinience of opensource

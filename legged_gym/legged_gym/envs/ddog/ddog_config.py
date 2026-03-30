@@ -173,19 +173,19 @@ class DdogRoughCfg( LeggedRobotCfg ):
 
     class rewards( LeggedRobotCfg.rewards ):
         class scales:
-            # action_rate = -0.01
-            # action_smoothness = -0.01
-            # ang_vel_xy = -0.1 
+            action_rate = -0.01
+            action_smoothness = -0.01
+            ang_vel_xy = -0.1 
             # base_height = -10.0
             # collision = -1.0
             # dof_acc = -2.5e-7
-            # feet_air_time = -2.0
-            # feet_air_time_var = -8.0
+            feet_air_time = -2.0
+            feet_air_time_var = -8.0
             # feet_contact_forces = -0.00015
             # foot_clearance = -0.5
-            # foot_mirror = -0.05
+            foot_mirror = -0.05
             # foot_slide = -0.05
-            # has_contact = 1.0
+            has_contact = 1.0
             # hip_pos = -5.0
             # lin_vel_z = -4.0
             # orientation = -0.2
