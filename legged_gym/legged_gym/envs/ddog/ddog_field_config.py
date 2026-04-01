@@ -3,19 +3,19 @@ import numpy as np
 from os import path as osp
 from collections import OrderedDict
 
-from legged_gym.envs.ddog.ddog_config import Ddog2RoughCfg, Ddog2RoughPPO
+from legged_gym.envs.ddog.ddog_config import DdogRoughCfg, DdogRoughCfgPPO
 
-class DdogFieldCfg( Ddog2RoughCfg ):
-    class init_state( Ddog2RoughCfg.init_state ):
-        pos = [0.0, 0.0, 0.3]
+class Ddog2Cfg( DdogRoughCfg ):
+    class init_state( DdogRoughCfg.init_state ):
+        pos = [0.0, 0.0, 0.5]
         zero_actions = False
 
-    class sensor( Ddog2RoughCfg.sensor):
-        class proprioception( Ddog2RoughCfg.sensor.proprioception ):
-            # latency_range = [0.0, 0.0]write
+    class sensor( DdogRoughCfg.sensor):
+        class proprioception( DdogRoughCfg.sensor.proprioception ):
+            # latency_range = [0.0, 0.0]
             latency_range = [0.005, 0.045] # [s]
 
-    class terrain( Ddog2RoughCfg.terrain ):
+    class terrain( DdogRoughCfg.terrain ):
         num_rows = 10
         num_cols = 40
         selected = "BarrierTrack"
@@ -131,11 +131,11 @@ class DdogFieldCfg( Ddog2RoughCfg ):
             n_obstacles_per_track= 1,
         )
 
-    class commands( Ddog2RoughCfg.commands ):
+    class commands( DdogRoughCfg.commands ):
         # a mixture of command sampling and goal_based command update allows only high speed range
         # in x-axis but no limits on y-axis and yaw-axis
         lin_cmd_cutoff = 0.2
-        class ranges( Ddog2RoughCfg.commands.ranges ):
+        class ranges( DdogRoughCfg.commands.ranges ):
             # lin_vel_x = [0.6, 1.8]
             lin_vel_x = [-0.6, 2.0]
         
@@ -148,11 +148,11 @@ class DdogFieldCfg( Ddog2RoughCfg ):
             follow_cmd_cutoff = True
             x_stop_by_yaw_threshold = 1. # stop when yaw is over this threshold [rad]
 
-    class asset( Ddog2RoughCfg.asset ):
+    class asset( DdogRoughCfg.asset ):
         terminate_after_contacts_on = []
         penalize_contacts_on = ["thigh", "calf", "base"]
 
-    class termination( Ddog2RoughCfg.termination ):
+    class termination( DdogRoughCfg.termination ):
         roll_kwargs = dict(
             threshold= 1.4, # [rad]
         )
@@ -162,7 +162,7 @@ class DdogFieldCfg( Ddog2RoughCfg ):
         timeout_at_border = True
         timeout_at_finished = False
 
-    class rewards( Ddog2RoughCfg.rewards ):
+    class rewards( DdogRoughCfg.rewards ):
         class scales:
             tracking_lin_vel = 1.
             tracking_ang_vel = 1.
@@ -179,7 +179,7 @@ class DdogFieldCfg( Ddog2RoughCfg ):
             # penetration penalty
             penetrate_depth = -0.05
 
-    class noise( Ddog2RoughCfg.noise ):
+    class noise( DdogRoughCfg.noise ):
         add_noise = False
 
     class curriculum:
@@ -188,43 +188,21 @@ class DdogFieldCfg( Ddog2RoughCfg ):
         no_moveup_when_fall = True
     
 logs_root = osp.join(osp.dirname(osp.dirname(osp.dirname(osp.dirname(osp.abspath(__file__))))), "logs")
-
-class Ddog2FieldCfgPPO( Ddog2RoughPPO ):
-    class algorithm( Ddog2RoughPPO.algorithm ):
+class Ddog2CfgPPO( DdogRoughCfgPPO ):
+    class algorithm( DdogRoughCfgPPO.algorithm ):
         entropy_coef = 0.0
 
-    class runner( Ddog2RoughPPO.runner ):
-        experiment_name = "field_ddog"
+    class runner( DdogRoughCfgPPO.runner ):
+        experiment_name = "Ddog2"
 
         resume = True
-        load_run = osp.join(logs_root, "field_ddog",
-            "/root/mym/parkour-main/legged_gym/logs/field_ddog/Feb25_02-19-27_Ddog_10skills_pEnergy2.e-07_pTorques-1.e-07_pLazyStop-3.e+00_pPenD5.e-02_penEasier200_penHarder100_leapHeight2.e-01_motorTorqueClip_fromFeb11_08-00-01",
+        load_run = osp.join(logs_root, "rough_ddog",
+            "first",
         )
 
-        run_name = "".join(["Ddog_",
-            ("{:d}skills".format(len(DdogFieldCfg.terrain.BarrierTrack_kwargs["options"]))),
-            ("_pEnergy" + np.format_float_scientific(-DdogFieldCfg.rewards.scales.energy_substeps, precision=2)),
-            # ("_pDofErr" + np.format_float_scientific(-Ddog2RoughCfg.rewards.scales.dof_error, precision=2) if getattr(Ddog2RoughCfg.rewards.scales, "dof_error", 0.) != 0. else ""),
-            # ("_pHipDofErr" + np.format_float_scientific(-Ddog2RoughCfg.rewards.scales.dof_error_named, precision=2) if getattr(Ddog2RoughCfg.rewards.scales, "dof_error_named", 0.) != 0. else ""),
-            # ("_pStand" + np.format_float_scientific(Ddog2RoughCfg.rewards.scales.stand_still, precision=2)),
-            # ("_pTerm" + np.format_float_scientific(Ddog2RoughCfg.rewards.scales.termination, precision=2) if hasattr(Ddog2RoughCfg.rewards.scales, "termination") else ""),
-            ("_pTorques" + np.format_float_scientific(DdogFieldCfg.rewards.scales.torques, precision=2) if hasattr(DdogFieldCfg.rewards.scales, "torques") else ""),
-            # ("_pColl" + np.format_float_scientific(Ddog2RoughCfg.rewards.scales.collision, precision=2) if hasattr(Ddog2RoughCfg.rewards.scales, "collision") else ""),
-            ("_pLazyStop" + np.format_float_scientific(DdogFieldCfg.rewards.scales.lazy_stop, precision=2) if hasattr(DdogFieldCfg.rewards.scales, "lazy_stop") else ""),
-            # ("_trackSigma" + np.format_float_scientific(Ddog2RoughCfg.rewards.tracking_sigma, precision=2) if Ddog2RoughCfg.rewards.tracking_sigma != 0.25 else ""),
-            # ("_pPenV" + np.format_float_scientific(-Ddog2RoughCfg.rewards.scales.penetrate_volume, precision=2)),
-            ("_pPenD" + np.format_float_scientific(-DdogFieldCfg.rewards.scales.penetrate_depth, precision=2)),
-            # ("_pTorqueL1" + np.format_float_scientific(-Ddog2RoughCfg.rewards.scales.exceed_torque_limits_l1norm, precision=2)),
-            ("_penEasier{:d}".format(DdogFieldCfg.curriculum.penetrate_depth_threshold_easier)),
-            ("_penHarder{:d}".format(DdogFieldCfg.curriculum.penetrate_depth_threshold_harder)),
-            # ("_leapMin" + np.format_float_scientific(Ddog2RoughCfg.terrain.BarrierTrack_kwargs["leap"]["length"][0], precision=2)),
-            ("_leapHeight" + np.format_float_scientific(DdogFieldCfg.terrain.BarrierTrack_kwargs["leap"]["height"], precision=2)),
-            ("_motorTorqueClip" if DdogFieldCfg.control.motor_clip_torque else ""),
-            # ("_noMoveupWhenFall" if Ddog2RoughCfg.curriculum.no_moveup_when_fall else ""),
-            ("_noResume" if not resume else "_from" + "_".join(load_run.split("/")[-1].split("_")[:2])),
-        ])
+        run_name = "".join(["Ddog2"])
 
-        max_iterations = 38000
-        save_interval = 500
-        log_interval = 100
+        max_iterations = 30000
+        save_interval = 1000
+        log_interval = 10
         

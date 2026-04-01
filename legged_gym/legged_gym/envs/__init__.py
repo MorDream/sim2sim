@@ -47,8 +47,8 @@ from .go1.go1_field_distill_config import Go1FieldDistillCfg, Go1FieldDistillCfg
 from .go2.go2_config import Go2RoughCfg, Go2RoughCfgPPO
 from .go2.go2_field_config import Go2FieldCfg, Go2FieldCfgPPO
 from .go2.go2_distill_config import Go2DistillCfg, Go2DistillCfgPPO
-from .ddog.ddog_config import Ddog2RoughCfg, Ddog2RoughPPO
-from .ddog.ddog_field_config import DdogFieldCfg, Ddog2FieldCfgPPO
+from .ddog.ddog_config import DdogRoughCfg, DdogRoughCfgPPO
+from .ddog.ddog_field_config import Ddog2Cfg, Ddog2CfgPPO
 
 
 import os
@@ -71,5 +71,5 @@ from .a1.a1_remote_config import A1RemoteCfg, A1RemoteCfgPPO
 task_registry.register( "a1_remote", LeggedRobot, A1RemoteCfg(), A1RemoteCfgPPO() )
 from .go1.go1_remote_config import Go1RemoteCfg, Go1RemoteCfgPPO
 task_registry.register( "go1_remote", LeggedRobot, Go1RemoteCfg(), Go1RemoteCfgPPO() )
-task_registry.register( "ddog", LeggedRobot, Ddog2RoughCfg(), Ddog2RoughPPO())
-task_registry.register( "ddog_field", RobotFieldNoisy, DdogFieldCfg(), Ddog2FieldCfgPPO())  
+task_registry.register( "ddog", LeggedRobot, DdogRoughCfg(), DdogRoughCfgPPO() )
+task_registry.register( "ddog_field", RobotFieldNoisy, Ddog2Cfg(), Ddog2CfgPPO())  

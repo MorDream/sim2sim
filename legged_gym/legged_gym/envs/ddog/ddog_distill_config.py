@@ -56,7 +56,7 @@ class DdogDistillCfg( DdogFieldCfg ):
             obs_components = ["forward_depth"]
             resolution = [int(480/4), int(640/4)]
             position = dict(
-                mean= [0.24, -0.0175, 0.12],
+                mean= [0.2, -0.0175, 0.10],
                 std= [0.01, 0.0025, 0.03],
             )
             rotation = dict(

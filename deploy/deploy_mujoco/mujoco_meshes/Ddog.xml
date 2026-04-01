@@ -1,0 +1,426 @@
+<mujoco model="hje3">
+    <compiler angle="radian" meshdir="./" texturedir="./" autolimits="true"/>
+
+    <option cone="elliptic" impratio="100" >
+    </option>
+
+    <default>
+        <joint limited='true' damping="0.1" armature="0.01" frictionloss="0.2"/>
+        <motor ctrllimited='true'/>
+        <geom friction="1.0" contype='0' conaffinity='0' condim='3' solref='0.005 1'/>
+        <equality solref='0.005 1'/>
+        <default class='collision'>
+            <geom material='collision' contype='1' conaffinity='1'/>
+        </default>
+    </default>
+
+    <asset>
+        <material name='collision' rgba='0.1 0.5 0.9 0'/>
+
+        <mesh name="base_link" file="base_link.STL"/>
+        <mesh name="FL_HIP_Link" file="FL_HIP_Link.STL"/>
+        <mesh name="FL_CALF_Link" file="FL_CALF_Link.STL"/>
+        <mesh name="FL_FOOT_Link" file="FL_FOOT_Link.STL"/>
+        <mesh name="FL_THIGH_Link" file="FL_THIGH_Link.STL"/>
+        <mesh name="FR_HIP_Link" file="FR_HIP_Link.STL"/>
+        <mesh name="FR_CALF_Link" file="FR_CALF_Link.STL"/>
+        <mesh name="FR_FOOT_Link" file="FR_FOOT_Link.STL"/>
+        <mesh name="FR_THIGH_Link" file="FR_THIGH_Link.STL"/>
+        <mesh name="RL_HIP_Link" file="RL_HIP_Link.STL"/>
+        <mesh name="RL_CALF_Link" file="RL_CALF_Link.STL"/>
+        <mesh name="RL_FOOT_Link" file="RL_FOOT_Link.STL"/>
+        <mesh name="RL_THIGH_Link" file="RL_THIGH_Link.STL"/>
+        <mesh name="RR_HIP_Link" file="RR_HIP_Link.STL"/>
+        <mesh name="RR_CALF_Link" file="RR_CALF_Link.STL"/>
+        <mesh name="RR_FOOT_Link" file="RR_FOOT_Link.STL"/>
+        <mesh name="RR_THIGH_Link" file="RR_THIGH_Link.STL"/>
+
+        <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
+        <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
+                 markrgb="0.8 0.8 0.8" width="300" height="300"/>
+        <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
+        <!-- <hfield name="gentle_pebbles_flat" nrow="121" ncol="121"
+        size="1.67 5 0.25 0.01"
+        file="terrain_gentle_pebbles_flat.png"/>
+
+        <hfield name="blocks_10x16" nrow="513" ncol="513"
+        size="5 5 0.1 0.15"
+        file="terrain_blocks_10x16_513x513.png"/> -->
+    </asset>
+
+    <worldbody>
+        <light directional="true" diffuse=".8 .8 .8" pos="0 0 10" dir="0 0 -10"/>
+
+        <geom name="flat_pad_start" type="box" size="20.0 5 0.05" pos="-25.000 0 -0.0" material="groundplane" contype="1" conaffinity="15"/>
+
+        <geom name="floor" size="0 0 0.05" type="plane" material="groundplane" contype="1" conaffinity='15' friction="1.0 0.005 0.0001"/>
+        
+        <!-- <geom name="gentle_pebbles_patch" type="hfield" hfield="gentle_pebbles_flat" pos="3.34 0 0.001" material="groundplane" contype="1" conaffinity="15"/> -->
+
+        <!-- <geom name="blocks_field_dense" type="hfield" hfield="blocks_10x16" pos="10.01 0 0.001" material="groundplane" contype="1" conaffinity="15"/> -->
+
+        <!-- L=4, H=0.8 → θ=0.197396rad ≈ 11.31° 0.26rad 15 0.34rad 20 0.52rad 30 0.69rad 40-->
+        <geom name="slope_up" type="box" size="2.0 1 0.05" pos="15.01 0 0.35097" euler="0 -0.26 0" material="groundplane" contype="1" conaffinity="15"/>
+
+        <geom name="slope_down" type="box" size="2.0 1 0.05" pos="19.01 0 0.35097" euler="0 0.197396 0" material="groundplane" contype="1" conaffinity="15"/>
+
+        <geom name="flat_pad_mid" type="box" size="1.0 1 0.05" pos="22.010 0 -0.05" material="groundplane" contype="1" conaffinity="15"/>
+
+
+    <!-- ===== 不同坡度的坡道系统，每个y+4，坡度增加5°，直到40° ===== -->
+
+    <!-- ===== 不同坡度的坡道系统，每个y+4，坡度增加5°，直到40° ===== -->
+        <!-- y=4: 10° 坡道 (无缝衔接) -->
+        <geom name="slope_up_y4" type="box" size="2.0 1 0.05" pos="15.01 4 0.17101" euler="0 -0.174533 0" material="groundplane" contype="1" conaffinity="15"/>
+        <geom name="slope_platform_y4" type="box" size="0.0304 1 0.05" pos="17.01 4 0.51703" material="groundplane" contype="1" conaffinity="15"/>
+        <geom name="slope_down_y4" type="box" size="2.0 1 0.05" pos="19.01 4 0.17101" euler="0 0.174533 0" material="groundplane" contype="1" conaffinity="15"/>
+        <geom name="flat_pad_mid_y4" type="box" size="1.0 1 0.05" pos="22.010 4 -0.05" material="groundplane" contype="1" conaffinity="15"/>
+
+        <!-- y=8: 15° 坡道 (无缝衔接) -->
+        <geom name="slope_up_y8" type="box" size="2.0 1 0.05" pos="15.01 8 0.25882" euler="0 -0.261799 0" material="groundplane" contype="1" conaffinity="15"/>
+        <geom name="slope_platform_y8" type="box" size="0.0682 1 0.05" pos="17.01 8 0.77646" material="groundplane" contype="1" conaffinity="15"/>
+        <geom name="slope_down_y8" type="box" size="2.0 1 0.05" pos="19.01 8 0.25882" euler="0 0.261799 0" material="groundplane" contype="1" conaffinity="15"/>
+        <geom name="flat_pad_mid_y8" type="box" size="1.0 1 0.05" pos="22.010 8 -0.05" material="groundplane" contype="1" conaffinity="15"/>
+
+        <!-- y=12: 20° 坡道 (无缝衔接) -->
+        <geom name="slope_up_y12" type="box" size="2.0 1 0.05" pos="15.01 12 0.34202" euler="0 -0.349066 0" material="groundplane" contype="1" conaffinity="15"/>
+        <geom name="slope_platform_y12" type="box" size="0.1206 1 0.05" pos="17.01 12 1.02606" material="groundplane" contype="1" conaffinity="15"/>
+        <geom name="slope_down_y12" type="box" size="2.0 1 0.05" pos="19.01 12 0.34202" euler="0 0.349066 0" material="groundplane" contype="1" conaffinity="15"/>
+        <geom name="flat_pad_mid_y12" type="box" size="1.0 1 0.05" pos="22.010 12 -0.05" material="groundplane" contype="1" conaffinity="15"/>
+
+        <!-- y=16: 25° 坡道 (无缝衔接) -->
+        <geom name="slope_up_y16" type="box" size="2.0 1 0.05" pos="15.01 16 0.42262" euler="0 -0.436332 0" material="groundplane" contype="1" conaffinity="15"/>
+        <geom name="slope_platform_y16" type="box" size="0.1874 1 0.05" pos="17.01 16 1.26786" material="groundplane" contype="1" conaffinity="15"/>
+        <geom name="slope_down_y16" type="box" size="2.0 1 0.05" pos="19.01 16 0.42262" euler="0 0.436332 0" material="groundplane" contype="1" conaffinity="15"/>
+        <geom name="flat_pad_mid_y16" type="box" size="1.0 1 0.05" pos="22.010 16 -0.05" material="groundplane" contype="1" conaffinity="15"/>
+
+        <!-- y=20: 30° 坡道 (无缝衔接) -->
+        <geom name="slope_up_y20" type="box" size="2.0 1 0.05" pos="15.01 20 0.5" euler="0 -0.523599 0" material="groundplane" contype="1" conaffinity="15"/>
+        <geom name="slope_platform_y20" type="box" size="0.2680 1 0.05" pos="17.01 20 1.5" material="groundplane" contype="1" conaffinity="15"/>
+        <geom name="slope_down_y20" type="box" size="2.0 1 0.05" pos="19.01 20 0.5" euler="0 0.523599 0" material="groundplane" contype="1" conaffinity="15"/>
+        <geom name="flat_pad_mid_y20" type="box" size="1.0 1 0.05" pos="22.010 20 -0.05" material="groundplane" contype="1" conaffinity="15"/>
+
+        <!-- y=24: 35° 坡道 (无缝衔接) -->
+        <geom name="slope_up_y24" type="box" size="2.0 1 0.05" pos="15.01 24 0.57358" euler="0 -0.610865 0" material="groundplane" contype="1" conaffinity="15"/>
+        <geom name="slope_platform_y24" type="box" size="0.3616 1 0.05" pos="17.01 24 1.72074" material="groundplane" contype="1" conaffinity="15"/>
+        <geom name="slope_down_y24" type="box" size="2.0 1 0.05" pos="19.01 24 0.57358" euler="0 0.610865 0" material="groundplane" contype="1" conaffinity="15"/>
+        <geom name="flat_pad_mid_y24" type="box" size="1.0 1 0.05" pos="22.010 24 -0.05" material="groundplane" contype="1" conaffinity="15"/>
+
+        <!-- y=28: 40° 坡道 (无缝衔接) -->
+        <geom name="slope_up_y28" type="box" size="2.0 1 0.05" pos="15.01 28 0.64279" euler="0 -0.698132 0" rgba="0.6 0.9 0.9 1" contype="1" conaffinity="15"/>
+        <geom name="slope_platform_y28" type="box" size="0.4680 1 0.05" pos="17.01 28 1.92837" rgba="0.6 0.9 0.9 1" contype="1" conaffinity="15"/>
+        <geom name="slope_down_y28" type="box" size="2.0 1 0.05" pos="19.01 28 0.64279" euler="0 0.698132 0" rgba="0.6 0.9 0.9 1" contype="1" conaffinity="15"/>
+
+
+        <!-- ===== Upstairs: N=8, rise=0.14, tread=0.25, width=10m ===== -->
+        <geom name="stair_up_1" type="box" size="0.125 5 0.07" pos="25.145 0 0.07" rgba="0.6 0.9 0.9 1" contype="1" conaffinity="15"/>
+        <geom name="stair_up_2" type="box" size="0.125 5 0.14" pos="25.395 0 0.14" rgba="0.6 0.9 0.9 1" contype="1" conaffinity="15"/>
+        <geom name="stair_up_3" type="box" size="0.125 5 0.21" pos="25.645 0 0.21" rgba="0.6 0.9 0.9 1" contype="1" conaffinity="15"/>
+        <geom name="stair_up_4" type="box" size="0.125 5 0.28" pos="25.895 0 0.28" rgba="0.6 0.9 0.9 1" contype="1" conaffinity="15"/>
+        <geom name="stair_up_5" type="box" size="0.125 5 0.35" pos="26.145 0 0.35" rgba="0.6 0.9 0.9 1" contype="1" conaffinity="15"/>
+        <geom name="stair_up_6" type="box" size="0.125 5 0.42" pos="26.395 0 0.42" rgba="0.6 0.9 0.9 1" contype="1" conaffinity="15"/>
+        <geom name="stair_up_7" type="box" size="0.125 5 0.49" pos="26.645 0 0.49" rgba="0.6 0.9 0.9 1" contype="1" conaffinity="15"/>
+        <geom name="stair_up_8" type="box" size="0.125 5 0.56" pos="26.895 0 0.56" rgba="0.6 0.9 0.9 1" contype="1" conaffinity="15"/>
+
+        <!-- Landing at top: length 0.6m, top height 8*0.14 = 1.12m -->
+        <geom name="stair_land"  type="box" size="0.30 5 0.56" pos="27.32 0 0.56" rgba="0.6 0.9 0.9 1" contype="1" conaffinity="15"/>
+
+        <!-- ===== Downstairs: mirror back down ===== -->
+        <geom name="stair_dn_1" type="box" size="0.125 5 0.56" pos="27.745 0 0.56" rgba="0.6 0.9 0.9 1" contype="1" conaffinity="15"/>
+        <geom name="stair_dn_2" type="box" size="0.125 5 0.49" pos="27.995 0 0.49" rgba="0.6 0.9 0.9 1" contype="1" conaffinity="15"/>
+        <geom name="stair_dn_3" type="box" size="0.125 5 0.42" pos="28.245 0 0.42" rgba="0.6 0.9 0.9 1" contype="1" conaffinity="15"/>
+        <geom name="stair_dn_4" type="box" size="0.125 5 0.35" pos="28.495 0 0.35" rgba="0.6 0.9 0.9 1" contype="1" conaffinity="15"/>
+        <geom name="stair_dn_5" type="box" size="0.125 5 0.28" pos="28.745 0 0.28" rgba="0.6 0.9 0.9 1" contype="1" conaffinity="15"/>
+        <geom name="stair_dn_6" type="box" size="0.125 5 0.21" pos="28.995 0 0.21" rgba="0.6 0.9 0.9 1" contype="1" conaffinity="15"/>
+        <geom name="stair_dn_7" type="box" size="0.125 5 0.14" pos="29.245 0 0.14" rgba="0.6 0.9 0.9 1" contype="1" conaffinity="15"/>
+        <geom name="stair_dn_8" type="box" size="0.125 5 0.07" pos="29.495 0 0.07" rgba="0.6 0.9 0.9 1" contype="1" conaffinity="15"/>
+
+        <!-- ===== Upstairs: N=8, rise=0.17, tread=0.25, width=2m ===== -->
+        <geom name="gradient_stair_up_1" type="box" size="0.125 1 0.085"  pos="2.00 0 0.085" rgba="0.6 0.9 0.9 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_up_2" type="box" size="0.125 1 0.085"  pos="2.30 0 0.255" rgba="0.5 0.8 0.8 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_up_3" type="box" size="0.125 1 0.085"  pos="2.60 0 0.425" rgba="0.4 0.7 0.7 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_up_4" type="box" size="0.125 1 0.085"  pos="2.90 0 0.595" rgba="0.3 0.6 0.6 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_up_5" type="box" size="0.125 1 0.085"  pos="3.20 0 0.765" rgba="0.2 0.5 0.5 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_up_6" type="box" size="0.125 1 0.085"  pos="3.50 0 0.935" rgba="0.1 0.4 0.4 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_up_7" type="box" size="0.125 1 0.085"  pos="3.80 0 1.105" rgba="0.05 0.3 0.3 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_up_8" type="box" size="0.125 1 0.085"  pos="4.10 0 1.275" rgba="0.0 0.25 0.25 1" contype="1" conaffinity="15"/>
+
+        <geom name="gradient_stair_land" type="box" size="0.30 1 0.085"   pos="4.60 0 1.360" rgba="0.0 0.2 0.2 1" contype="1" conaffinity="15"/>
+
+        <geom name="gradient_stair_dn_1" type="box" size="0.125 1 0.085"  pos="5.10 0 1.275" rgba="0.8 0.6 1.0 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_dn_2" type="box" size="0.125 1 0.085"  pos="5.40 0 1.105" rgba="0.7 0.5 0.9 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_dn_3" type="box" size="0.125 1 0.085"  pos="5.70 0 0.935" rgba="0.6 0.4 0.8 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_dn_4" type="box" size="0.125 1 0.085"  pos="6.00 0 0.765" rgba="0.5 0.3 0.7 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_dn_5" type="box" size="0.125 1 0.085"  pos="6.30 0 0.595" rgba="0.4 0.2 0.6 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_dn_6" type="box" size="0.125 1 0.085"  pos="6.60 0 0.425" rgba="0.3 0.15 0.5 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_dn_7" type="box" size="0.125 1 0.085"  pos="6.90 0 0.255" rgba="0.2 0.1 0.4 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_dn_8" type="box" size="0.125 1 0.085"  pos="7.20 0 0.085" rgba="0.15 0.05 0.3 1" contype="1" conaffinity="15"/>
+
+
+        <!-- ===== Upstairs: N=8, rise=0.25, tread=0.25, width=2m ===== -->
+        <geom name="gradient_stair_up_1_y12" type="box" size="0.125 1 0.125"  pos="2.00 12 0.125" rgba="1.0 0.8 0.4 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_up_2_y12" type="box" size="0.125 1 0.125"  pos="2.30 12 0.375" rgba="0.95 0.7 0.35 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_up_3_y12" type="box" size="0.125 1 0.125"  pos="2.60 12 0.625" rgba="0.9 0.6 0.3 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_up_4_y12" type="box" size="0.125 1 0.125"  pos="2.90 12 0.875" rgba="0.85 0.5 0.25 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_up_5_y12" type="box" size="0.125 1 0.125"  pos="3.20 12 1.125" rgba="0.8 0.4 0.2 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_up_6_y12" type="box" size="0.125 1 0.125"  pos="3.50 12 1.375" rgba="0.75 0.3 0.15 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_up_7_y12" type="box" size="0.125 1 0.125"  pos="3.80 12 1.625" rgba="0.7 0.2 0.1 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_up_8_y12" type="box" size="0.125 1 0.125"  pos="4.10 12 1.875" rgba="0.65 0.15 0.05 1" contype="1" conaffinity="15"/>
+
+        <geom name="gradient_stair_land_y12" type="box" size="0.30 1 0.125"   pos="4.60 12 2.000" rgba="0.6 0.1 0.0 1" contype="1" conaffinity="15"/>
+
+        <geom name="gradient_stair_dn_1_y12" type="box" size="0.125 1 0.125"  pos="5.10 12 1.875" rgba="0.8 0.4 1.0 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_dn_2_y12" type="box" size="0.125 1 0.125"  pos="5.40 12 1.625" rgba="0.75 0.35 0.95 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_dn_3_y12" type="box" size="0.125 1 0.125"  pos="5.70 12 1.375" rgba="0.7 0.3 0.9 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_dn_4_y12" type="box" size="0.125 1 0.125"  pos="6.00 12 1.125" rgba="0.65 0.25 0.85 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_dn_5_y12" type="box" size="0.125 1 0.125"  pos="6.30 12 0.875" rgba="0.6 0.2 0.8 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_dn_6_y12" type="box" size="0.125 1 0.125"  pos="6.60 12 0.625" rgba="0.55 0.15 0.75 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_dn_7_y12" type="box" size="0.125 1 0.125"  pos="6.90 12 0.375" rgba="0.5 0.1 0.7 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_dn_8_y12" type="box" size="0.125 1 0.125"  pos="7.20 12 0.125" rgba="0.45 0.05 0.65 1" contype="1" conaffinity="15"/>
+
+        <!-- ===== Upstairs: N=8, rise=0.23, tread=0.25, width=2m ===== -->
+        <geom name="gradient_stair_up_1_y8" type="box" size="0.125 1 0.115"  pos="2.00 8 0.115" rgba="1.0 0.8 0.9 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_up_2_y8" type="box" size="0.125 1 0.115"  pos="2.30 8 0.345" rgba="0.9 0.7 0.8 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_up_3_y8" type="box" size="0.125 1 0.115"  pos="2.60 8 0.575" rgba="0.8 0.6 0.7 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_up_4_y8" type="box" size="0.125 1 0.115"  pos="2.90 8 0.805" rgba="0.7 0.5 0.6 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_up_5_y8" type="box" size="0.125 1 0.115"  pos="3.20 8 1.035" rgba="0.6 0.4 0.5 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_up_6_y8" type="box" size="0.125 1 0.115"  pos="3.50 8 1.265" rgba="0.5 0.3 0.4 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_up_7_y8" type="box" size="0.125 1 0.115"  pos="3.80 8 1.495" rgba="0.4 0.2 0.3 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_up_8_y8" type="box" size="0.125 1 0.115"  pos="4.10 8 1.725" rgba="0.3 0.15 0.2 1" contype="1" conaffinity="15"/>
+
+        <geom name="gradient_stair_land_y8" type="box" size="0.30 1 0.115"   pos="4.60 8 1.840" rgba="0.2 0.1 0.15 1" contype="1" conaffinity="15"/>
+
+        <geom name="gradient_stair_dn_1_y8" type="box" size="0.125 1 0.115"  pos="5.10 8 1.725" rgba="0.4 0.6 1.0 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_dn_2_y8" type="box" size="0.125 1 0.115"  pos="5.40 8 1.495" rgba="0.35 0.5 0.9 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_dn_3_y8" type="box" size="0.125 1 0.115"  pos="5.70 8 1.265" rgba="0.3 0.45 0.8 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_dn_4_y8" type="box" size="0.125 1 0.115"  pos="6.00 8 0.805" rgba="0.25 0.4 0.7 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_dn_5_y8" type="box" size="0.125 1 0.115"  pos="6.30 8 0.575" rgba="0.2 0.35 0.6 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_dn_6_y8" type="box" size="0.125 1 0.115"  pos="6.60 8 0.345" rgba="0.15 0.3 0.5 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_dn_7_y8" type="box" size="0.125 1 0.115"  pos="6.90 8 0.115" rgba="0.1 0.25 0.4 1" contype="1" conaffinity="15"/>
+        <geom name="gradient_stair_dn_8_y8" type="box" size="0.125 1 0.115"  pos="7.20 8 -0.115" rgba="0.05 0.2 0.3 1" contype="1" conaffinity="15"/>
+        
+        
+        <!-- ========== 上楼梯部分 ==========  20 -->
+        <geom name="step_up_new1" type="box" size="0.4 0.75 0.20" pos="2.00 4 0" rgba="0.6 0.6 0.8 1" contype="1" conaffinity="1"/>
+        <geom name="step_up_new2" type="box" size="0.4 0.75 0.20" pos="2.30 4 0.20" rgba="0.5 0.5 0.7 1" contype="1" conaffinity="1"/>
+        <geom name="step_up_new3" type="box" size="0.4 0.75 0.20" pos="2.60 4 0.40" rgba="0.4 0.4 0.6 1" contype="1" conaffinity="1"/>
+        <geom name="step_up_new4" type="box" size="0.4 0.75 0.20" pos="2.90 4 0.60" rgba="0.3 0.3 0.5 1" contype="1" conaffinity="1"/>
+        <geom name="step_up_new5" type="box" size="0.4 0.75 0.20" pos="3.20 4 0.80" rgba="0.2 0.2 0.4 1" contype="1" conaffinity="1"/>
+        <geom name="step_up_new6" type="box" size="0.4 0.75 0.20" pos="3.50 4 1.00" rgba="0.2 0.2 0.4 1" contype="1" conaffinity="1"/>
+        <geom name="step_up_new7" type="box" size="0.4 0.75 0.20" pos="3.80 4 1.20" rgba="0.2 0.2 0.4 1" contype="1" conaffinity="1"/>
+        <geom name="step_up_new8" type="box" size="0.4 0.75 0.20" pos="4.10 4 1.40" rgba="0.2 0.2 0.4 1" contype="1" conaffinity="1"/>
+        <!-- ========== 下楼梯部分 ========== -->
+        <geom name="step_down_new1" type="box" size="0.8 1 0.20" pos="5.00 4 1.20" rgba="0.8 0.6 0.6 1" contype="1" conaffinity="1"/>
+        <geom name="step_down_new2" type="box" size="0.8 1 0.20" pos="5.30 4 1.00" rgba="0.6 0.4 0.4 1" contype="1" conaffinity="1"/>
+        <geom name="step_down_new3" type="box" size="0.8 1 0.20" pos="5.60 4 0.80" rgba="0.5 0.3 0.3 1" contype="1" conaffinity="1"/>
+        <geom name="step_down_new4" type="box" size="0.8 1 0.20" pos="5.90 4 0.60" rgba="0.5 0.3 0.3 1" contype="1" conaffinity="1"/>
+        <geom name="step_down_new5" type="box" size="0.8 1 0.20" pos="6.20 4 0.40" rgba="0.5 0.3 0.3 1" contype="1" conaffinity="1"/>
+        <geom name="step_down_new6" type="box" size="0.8 1 0.20" pos="6.50 4 0.20" rgba="0.5 0.3 0.3 1" contype="1" conaffinity="1"/>
+        <geom name="step_down_new7" type="box" size="0.8 1 0.20" pos="6.80 4 0.00" rgba="0.5 0.3 0.3 1" contype="1" conaffinity="1"/>
+
+        <!-- ========== 上楼梯部分 ========== -->
+        <geom name="step_up_1" type="box" size="0.6 0.75 0.20" pos="2.00 -10 0" rgba="0.6 0.6 0.8 1" contype="1" conaffinity="1"/>
+        <geom name="step_up_2" type="box" size="0.6 0.75 0.20" pos="2.30 -10 0.20" rgba="0.5 0.5 0.7 1" contype="1" conaffinity="1"/>
+        <geom name="step_up_3" type="box" size="0.6 0.75 0.20" pos="2.60 -10 0.40" rgba="0.4 0.4 0.6 1" contype="1" conaffinity="1"/>
+
+        <geom name="slope_down_new" type="box" size="0.55 0.75 0.02" pos="3.70 -10 0.3" euler="0 0.52 0" material="groundplane" contype="1" conaffinity="15"/>
+
+
+        <body name="base_link" pos="0 0 0.35">
+            <inertial pos="0.000055 0.001439 0.005245" mass="6.7" diaginertia="0.03265071  0.052731396  0.073843864"/>
+            <joint name="floating_base_joint" type="free"/>
+            <geom type="mesh" mesh="base_link" contype='1' conaffinity='1'/>
+            <site name="imu" pos="0 0 0.35"/>
+            <!-- 添加相机 弧度制！！！！ 位置来自go2_distill_config.py -->
+            <body name="depth_camera" pos="0.24 -0.0175 0.12" euler="0 0.40 0">
+                <!-- 相对于这个body的位置和方向 不要更改-->
+                <camera name="depth_camera" pos="0. 0. 0." euler="0 -1.57 0" fovy="66"/>
+                <geom type="box" size="0.01 0.1 0.02" rgba="0. 1.0 0. 0.6" group="1"/>
+            </body>
+            <!-- <body name="payload" pos="0 0 0.13">
+                <inertial pos="0 0 0" mass="8.0" diaginertia="0.02373 0.03333 0.04373"/>
+                <geom name="payload_box" type="box" size="0.10 0.08 0.05"
+                    rgba="0.9 0.3 0.3 1"
+                    contype="0" conaffinity="0"/>
+            </body> -->
+            <body name="FL_hip" pos="0.1875 0.062 0">
+                <inertial pos="-0.001963 0.001357 0" quat="0.483968 0.483887 0.515737 0.515406" mass="0.718" diaginertia="0.000432178 0.000398364 0.000359646"/>
+                <joint name="FL_hip_joint" pos="0 0 0" axis="1 0 0" range="-0.5 0.5"/>
+                <geom type="mesh" mesh="FL_HIP_Link"/>
+                <geom type="mesh" mesh="FL_HIP_Link" class="collision"/>
+                <body name="FL_thigh" pos="0 0.12 0">
+                    <inertial pos="-0.002987 -0.02756 -0.021782" quat="0.944228 -0.102647 -0.0790784 -0.302727" mass="0.96" diaginertia="0.00327793 0.00298996 0.000644293"/>
+                    <joint name="FL_thigh_joint" pos="0 0 0" axis="0 1 0" range="-1.85 3.4"/>
+                    <geom type="mesh" mesh="FL_THIGH_Link"/>
+                    <geom type="mesh" mesh="FL_THIGH_Link" class="collision"/>
+                    <body name="FL_calf" pos="0 0 -0.2">
+                        <inertial pos="0.00487469 -0.00010187 -0.153582" quat="0.705048 0.0254448 0.0260967 0.708222" mass="0.169" diaginertia="0.00127563 0.00125514 4.63246e-05"/>
+                        <joint name="FL_calf_joint" pos="0 0 0" axis="0 1 0" range="-2.757 -0.66"/>
+                        <geom type="mesh" mesh="FL_CALF_Link"/>
+                        <geom type="mesh" mesh="FL_CALF_Link" class="collision"/>
+                        <geom size="0.03" pos="0 0 -0.219" rgba="0.75294 0.75294 0.75294 1" class="collision"/>
+                        <geom name="fl_foot" size="0.03" pos="0 0 -0.219" rgba="0.75294 0.75294 0.75294 1" class="collision"/>
+                        <geom type="mesh" pos="0 0 -0.219" mesh="FL_FOOT_Link"/>
+                        <!-- <site name="fl_c_2" pos="0.00348 0 0.02476"/> -->
+                    </body>
+                </body>
+            </body>
+            <body name="FR_hip" pos="0.1875 -0.062 0">
+                <inertial pos="-0.001963 -0.001357 0" quat="0.515737 0.515406 0.483968 0.483887" mass="0.718" diaginertia="0.000432178 0.000398364 0.000359646"/>
+                <joint name="FR_hip_joint" pos="0 0 0" axis="1 0 0" range="-0.5 0.5"/>
+                <geom type="mesh" mesh="FR_HIP_Link"/>
+                <geom type="mesh" mesh="FR_HIP_Link" class="collision"/>
+                <body name="FR_thigh" pos="0 -0.12 0">
+                    <inertial pos="-0.002987 0.02756 -0.021782" quat="0.944228 0.102647 -0.0790784 0.302727" mass="0.96" diaginertia="0.00327793 0.00298996 0.000644293"/>
+                    <joint name="FR_thigh_joint" pos="0 0 0" axis="0 1 0" range="-1.85 3.4"/>
+                    <geom type="mesh" mesh="FR_THIGH_Link"/>
+                    <geom type="mesh" mesh="FR_THIGH_Link" class="collision"/>
+                    <body name="FR_calf" pos="0 0 -0.2">
+                        <inertial pos="0.00487469 -0.00010187 -0.153582" quat="0.705048 0.0254448 0.0260967 0.708222" mass="0.169" diaginertia="0.00127563 0.00125514 4.63246e-05"/>
+                        <joint name="FR_calf_joint" pos="0 0 0" axis="0 1 0" range="-2.757 -0.66"/>
+                        <geom type="mesh" mesh="FR_CALF_Link"/>
+                        <geom type="mesh" mesh="FR_CALF_Link" class="collision"/>
+                        <geom size="0.03" pos="0 0 -0.219" rgba="0.75294 0.75294 0.75294 1" class="collision"/>
+                        <geom name="fr_foot" size="0.03" pos="0 0 -0.219" rgba="0.75294 0.75294 0.75294 1" class="collision"/>
+                        <geom type="mesh" pos="0 0 -0.219" mesh="FR_FOOT_Link"/>
+                        <!-- <site name="fr_c_2" pos="0.00348 0 0.02476"/> -->
+                    </body>
+                </body>
+            </body>
+            <body name="RL_hip" pos="-0.1875 0.062 0">
+                <inertial pos="0.001963 0.001357 0" quat="0.515406 0.515737 0.483887 0.483968" mass="0.718" diaginertia="0.000432178 0.000398364 0.000359646"/>
+                <joint name="RL_hip_joint" pos="0 0 0" axis="1 0 0" range="-0.5 0.5"/>
+                <geom type="mesh" mesh="RL_HIP_Link"/>
+                <geom type="mesh" mesh="RL_HIP_Link" class="collision"/>
+                <body name="RL_thigh" pos="0 0.12 0">
+                    <inertial pos="-0.002987 -0.02756 -0.021782" quat="0.944228 -0.102647 -0.0790784 -0.302727" mass="0.96" diaginertia="0.00327793 0.00298996 0.000644293"/>
+                    <joint name="RL_thigh_joint" pos="0 0 0" axis="0 1 0" range="-1.85 3.4"/>
+                    <geom type="mesh" mesh="RL_THIGH_Link"/>
+                    <geom type="mesh" mesh="RL_THIGH_Link" class="collision"/>
+                    <body name="RL_calf" pos="0 0 -0.2">
+                        <inertial pos="0.00487469 -0.00010187 -0.153582" quat="0.705048 0.0254448 0.0260967 0.708222" mass="0.169" diaginertia="0.00127563 0.00125514 4.63246e-05"/>
+                        <joint name="RL_calf_joint" pos="0 0 0" axis="0 1 0" range="-2.757 -0.66"/>
+                        <geom type="mesh" mesh="RL_CALF_Link"/>
+                        <geom type="mesh" mesh="RL_CALF_Link" class="collision"/>
+                        <geom size="0.03" pos="0 0 -0.219" rgba="0.75294 0.75294 0.75294 1" class="collision"/>
+                        <geom name="rl_foot" size="0.03" pos="0 0 -0.219" rgba="0.75294 0.75294 0.75294 1" class="collision"/>
+                        <geom type="mesh" pos="0 0 -0.219" mesh="RL_FOOT_Link"/>
+                        <!-- <site name="rl_c_2" pos="0.00348 0 0.02476"/> -->
+                    </body>
+                </body>
+            </body>
+            <body name="RR_hip" pos="-0.1875 -0.062 0">
+                <inertial pos="0.001963 -0.001357 0" quat="0.483887 0.483968 0.515406 0.515737" mass="0.718" diaginertia="0.000432178 0.000398364 0.000359646"/>
+                <joint name="RR_hip_joint" pos="0 0 0" axis="1 0 0" range="-0.5 0.5"/>
+                <geom type="mesh" mesh="RR_HIP_Link"/>
+                <geom type="mesh" mesh="RR_HIP_Link" class="collision"/>
+                <body name="RR_thigh" pos="0 -0.12 0">
+                    <inertial pos="-0.002987 0.02756 -0.021782" quat="0.944228 0.102647 -0.0790784 0.302727" mass="0.96" diaginertia="0.00327793 0.00298996 0.000644293"/>
+                    <joint name="RR_thigh_joint" pos="0 0 0" axis="0 1 0" range="-1.85 3.4"/>
+                    <geom type="mesh" mesh="RR_THIGH_Link"/>
+                    <geom type="mesh" mesh="RR_THIGH_Link" class="collision"/>
+                    <body name="RR_calf" pos="0 0 -0.2">
+                        <inertial pos="0.00487469 -0.00010187 -0.153582" quat="0.705048 0.0254448 0.0260967 0.708222" mass="0.169" diaginertia="0.00127563 0.00125514 4.63246e-05"/>
+                        <joint name="RR_calf_joint" pos="0 0 0" axis="0 1 0" range="-2.757 -0.66"/>
+                        <geom type="mesh" mesh="RR_CALF_Link"/>
+                        <geom type="mesh" mesh="RR_CALF_Link" class="collision"/>
+                        <geom size="0.03" pos="0 0 -0.219" rgba="1 1 1 1" class="collision"/>
+                        <geom name="rr_foot" size="0.03" pos="0 0 -0.219" rgba="1 1 1 1" class="collision"/>
+                        <geom type="mesh" pos="0 0 -0.219" mesh="RR_FOOT_Link"/>
+                        <!-- <site name="rr_c_2" pos="0.00348 0 0.02476"/> -->
+                    </body>
+                </body>
+            </body>
+        </body>
+    </worldbody>
+
+    <!-- Enable self-collision while avoiding contacts between directly connected links -->
+    <contact>
+        <exclude body1="base_link" body2="FL_hip"/>
+        <exclude body1="base_link" body2="FL_thigh"/>
+        <exclude body1="FL_hip" body2="FL_thigh"/>
+        <exclude body1="FL_thigh" body2="FL_calf"/>
+
+        <exclude body1="base_link" body2="FR_hip"/>
+        <exclude body1="base_link" body2="FR_thigh"/>
+        <exclude body1="FR_hip" body2="FR_thigh"/>
+        <exclude body1="FR_thigh" body2="FR_calf"/>
+
+        <exclude body1="base_link" body2="RL_hip"/>
+        <exclude body1="base_link" body2="RL_thigh"/>
+        <exclude body1="RL_hip" body2="RL_thigh"/>
+        <exclude body1="RL_thigh" body2="RL_calf"/>
+
+        <exclude body1="base_link" body2="RR_hip"/>
+        <exclude body1="base_link" body2="RR_thigh"/>
+        <exclude body1="RR_hip" body2="RR_thigh"/>
+        <exclude body1="RR_thigh" body2="RR_calf"/>
+    </contact>
+
+    <actuator>
+        <motor ctrlrange="-27 27"  name="FL_hip" joint="FL_hip_joint"/>
+        <motor ctrlrange="-40 40"  name="FL_thigh" joint="FL_thigh_joint"/>
+        <motor ctrlrange="-40 40"  name="FL_calf" joint="FL_calf_joint"/>
+        <motor ctrlrange="-27 27"  name="FR_hip" joint="FR_hip_joint"/>
+        <motor ctrlrange="-40 40"  name="FR_thigh" joint="FR_thigh_joint"/>
+        <motor ctrlrange="-40 40"  name="FR_calf" joint="FR_calf_joint"/>
+        <motor ctrlrange="-27 27"  name="RL_hip" joint="RL_hip_joint"/>
+        <motor ctrlrange="-40 40"  name="RL_thigh" joint="RL_thigh_joint"/>
+        <motor ctrlrange="-40 40"  name="RL_calf" joint="RL_calf_joint"/>
+        <motor ctrlrange="-27 27"  name="RR_hip" joint="RR_hip_joint"/>
+        <motor ctrlrange="-40 40"  name="RR_thigh" joint="RR_thigh_joint"/>
+        <motor ctrlrange="-40 40"  name="RR_calf" joint="RR_calf_joint"/>
+    </actuator>
+
+
+    <sensor>
+        <jointpos name="FL_hip_pos" joint="FL_hip_joint"/>
+        <jointpos name="FL_thigh_pos" joint="FL_thigh_joint"/>
+        <jointpos name="FL_calf_pos" joint="FL_calf_joint"/>
+        <jointpos name="FR_hip_pos" joint="FR_hip_joint"/>
+        <jointpos name="FR_thigh_pos" joint="FR_thigh_joint"/>
+        <jointpos name="FR_calf_pos" joint="FR_calf_joint"/>
+        <jointpos name="RL_hip_pos" joint="RL_hip_joint"/>
+        <jointpos name="RL_thigh_pos" joint="RL_thigh_joint"/>
+        <jointpos name="RL_calf_pos" joint="RL_calf_joint"/>
+        <jointpos name="RR_hip_pos" joint="RR_hip_joint"/>
+        <jointpos name="RR_thigh_pos" joint="RR_thigh_joint"/>
+        <jointpos name="RR_calf_pos" joint="RR_calf_joint"/>
+
+        <jointvel name="FL_hip_vel" joint="FL_hip_joint"/>
+        <jointvel name="FL_thigh_vel" joint="FL_thigh_joint"/>
+        <jointvel name="FL_calf_vel" joint="FL_calf_joint"/>
+        <jointvel name="FR_hip_vel" joint="FR_hip_joint"/>
+        <jointvel name="FR_thigh_vel" joint="FR_thigh_joint"/>
+        <jointvel name="FR_calf_vel" joint="FR_calf_joint"/>
+        <jointvel name="RL_hip_vel" joint="RL_hip_joint"/>
+        <jointvel name="RL_thigh_vel" joint="RL_thigh_joint"/>
+        <jointvel name="RL_calf_vel" joint="RL_calf_joint"/>
+        <jointvel name="RR_hip_vel" joint="RR_hip_joint"/>
+        <jointvel name="RR_thigh_vel" joint="RR_thigh_joint"/>
+        <jointvel name="RR_calf_vel" joint="RR_calf_joint"/>
+
+
+        <jointactuatorfrc name="FL_hip_torque" joint="FL_hip_joint" noise="0.01"/>
+        <jointactuatorfrc name="FL_thigh_torque" joint="FL_thigh_joint" noise="0.01"/>
+        <jointactuatorfrc name="FL_calf_torque" joint="FL_calf_joint" noise="0.01"/>
+        <jointactuatorfrc name="FR_hip_torque" joint="FR_hip_joint" noise="0.01"/>
+        <jointactuatorfrc name="FR_thigh_torque" joint="FR_thigh_joint" noise="0.01"/>
+        <jointactuatorfrc name="FR_calf_torque" joint="FR_calf_joint" noise="0.01"/>
+        <jointactuatorfrc name="RL_hip_torque" joint="RL_hip_joint" noise="0.01"/>
+        <jointactuatorfrc name="RL_thigh_torque" joint="RL_thigh_joint" noise="0.01"/>
+        <jointactuatorfrc name="RL_calf_torque" joint="RL_calf_joint" noise="0.01"/>
+        <jointactuatorfrc name="RR_hip_torque" joint="RR_hip_joint" noise="0.01"/>
+        <jointactuatorfrc name="RR_thigh_torque" joint="RR_thigh_joint" noise="0.01"/>
+        <jointactuatorfrc name="RR_calf_torque" joint="RR_calf_joint" noise="0.01"/>
+
+
+        <framequat name="imu_quat" objtype="site" objname="imu"/>
+        <gyro name="imu_gyro" site="imu"/>
+        <accelerometer name="imu_acc" site="imu"/>
+
+        <framepos name="frame_pos" objtype="site" objname="imu"/>
+        <framelinvel name="frame_vel" objtype="site" objname="imu"/>
+    </sensor>
+
+</mujoco>

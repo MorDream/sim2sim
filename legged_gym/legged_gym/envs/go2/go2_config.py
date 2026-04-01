@@ -19,7 +19,7 @@ go2_const_dof_range = dict(
 
 class Go2RoughCfg( LeggedRobotCfg ):
     class env:
-        num_envs = 4096 + 2000
+        num_envs = 4096
         num_observations = None # No use, use obs_components
         num_privileged_obs = None # No use, use privileged_obs_components
 

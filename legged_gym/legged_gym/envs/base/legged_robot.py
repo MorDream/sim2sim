@@ -964,6 +964,16 @@ class LeggedRobot(BaseTask):
         noise_vec[:] = 0.
 
     def _write_height_measurements_noise(self, noise_vec):
+        # 预计算高度测量观测添加的噪声标准差
+        # 噪声添加公式：噪声向量 = 缩放系数 × 噪声等级 × 观测缩放系数
+        # 后续会用 torch.normal(mean=0.0, std=noise_vec) 生成高斯噪声加到观测上
+        # 
+        # 原理说明：
+        # - noise_scales.height_measurements: 该观测分量的相对噪声比例（从配置读取，通常0.1表示10%）
+        # - noise_level: 全局噪声强度缩放系数，可以整体调整噪声大小
+        # - obs_scales.height_measurements: 观测已经被归一化缩放，噪声也要同步缩放
+        #
+        # 最终生成的噪声 = 高斯分布N(0, std^2)，其中std = 噪声比例 × 全局等级 × 观测缩放
         noise_scales = self.cfg.noise.noise_scales
         noise_level = self.cfg.noise.noise_level
         noise_vec[:] = noise_scales.height_measurements * noise_level * self.obs_scales.height_measurements
@@ -1033,6 +1043,7 @@ class LeggedRobot(BaseTask):
         self.action_history_buf = torch.zeros(self.num_envs, self.cfg.env.history_len, self.num_dofs, device=self.device, dtype=torch.float)
         self.feet_pos = self.rigid_body_states[:, self.feet_indices, 0:3]
         self.feet_vel = self.rigid_body_states[:, self.feet_indices, 7:10]
+        self.last_air_time = torch.zeros(self.num_envs, self.feet_indices.shape[0], dtype=torch.float, device=self.device, requires_grad=False)
         #===========add===========================
         if self.cfg.terrain.measure_heights:
             self.height_points = self._init_height_points()
@@ -1250,6 +1261,7 @@ class LeggedRobot(BaseTask):
         self.last_torques[env_ids] = 0.
         self.feet_air_time[env_ids] = 0.
         self.episode_length_buf[env_ids] = 0
+        self.last_air_time[env_ids] = 0.
         self.reset_buf[env_ids] = 1
         self.max_power_per_timestep[env_ids] = 0.
         self.action_history_buf[env_ids, :, :] = 0.
@@ -1858,17 +1870,20 @@ class LeggedRobot(BaseTask):
         return torch.exp(-ang_vel_error/self.cfg.rewards.tracking_sigma)
 
     def _reward_feet_air_time(self):
-        # Reward long steps
-        # Need to filter the contacts because the contact reporting of PhysX is unreliable on meshes
-        last_contact = self.last_contact_forces[:, self.feet_indices, 2] > 1.
-        contact = self.contact_forces[:, self.feet_indices, 2] > 1.
-        contact_filt = torch.logical_or(contact, last_contact)
-        first_contact = (self.feet_air_time > 0.) * contact_filt
+        # Reward feet air time to target
+        first_contact = (self.feet_air_time > 0.) * self.contact_filt
         self.feet_air_time += self.dt
-        rew_airTime = torch.sum(torch.clip(self.feet_air_time - 0.3, min=0.) * first_contact, dim=1)  # 只奖励超过0.3秒的，不惩罚短悬空
+        self.last_air_time = torch.where(first_contact, self.feet_air_time, self.last_air_time)
+        feet_air_time_target = torch.full((self.num_envs, 4), self.cfg.rewards.feet_air_time_target).to(self.device)
+        rew_airTime = torch.sum(torch.abs(self.feet_air_time - feet_air_time_target) * first_contact, dim=1) # reward only on first contact with the ground
         rew_airTime *= torch.norm(self.commands[:, :2], dim=1) > 0.1 #no reward for zero command
-        self.feet_air_time *= ~contact_filt
+        self.feet_air_time *= ~self.contact_filt
         return rew_airTime
+    
+    def _reward_feet_air_time_var(self):
+        rew_airTime_var = torch.var(torch.clip(self.last_air_time,max=0.5),dim=1)
+        rew_airTime_var *= torch.norm(self.commands[:, :2], dim=1) > 0.1 #no reward for zero command
+        return rew_airTime_var
 
     def _reward_stumble(self):
         # Penalize feet hitting vertical surfaces
@@ -1876,10 +1891,12 @@ class LeggedRobot(BaseTask):
              5 *torch.abs(self.contact_forces[:, self.feet_indices, 2]), dim=1)
 
     def _reward_stand_still(self):
-        # Penalize motion at zero commands
-        return torch.sum(torch.abs(self.dof_pos - self.default_dof_pos), dim=1) \
-            * (torch.norm(self.commands[:, :2], dim=1) < 0.1) \
-            * (torch.abs(self.commands[:, 2]) < 0.2)
+        # 零速命令时惩罚关节运动，鼓励保持静止站立姿势
+        # 计算当前关节位置与默认姿势的L1误差
+        # 只在线速度和偏航角速度都接近零时（视为零速命令）生效
+        return (torch.sum(torch.abs(self.dof_pos - self.default_dof_pos), dim=1)
+                * (torch.norm(self.commands[:, :2], dim=1) < 0.1)  # 线速度XY范数小于0.1视为零速
+                * (torch.abs(self.commands[:, 2]) < 0.2))          # 偏航角速度绝对值小于0.2视为零速
 
     def _reward_stop_lin_vel(self):
         # Penalize x/y/z speed at zero commands

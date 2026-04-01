@@ -1,0 +1,443 @@
+# 深度相机图像从读取到输入策略网络完整处理流程报告
+
+=============================================================================
+
+## 一、整体概述
+
+本文档整理了Parkour项目中，机器人前置深度相机从图像采集、预处理、到最终输入策略网络生成动作的完整计算流程。
+该流程适用于Go2、Ddog等支持视觉导航的四足机器人。
+
+=============================================================================
+
+## 二、配置参数 (以go2_distill_config.py为例)
+
+=============================================================================
+
+### 2.1 相机基本参数
+```
+sensor.forward_camera:
+- obs_components = ["forward_depth"]          # 观测组件包含深度图
+- resolution = [120, 160]                      # 原始分辨率 (H, W) = 480/4, 640/4
+- position.mean = [0.24, -0.0175, 0.12]       # 相机相对于基座的平均位置 (m)
+- position.std = [0.01, 0.0025, 0.03]         # 训练时位置随机化标准差
+- rotation.lower = [-0.1, 0.37, -0.1]         # 旋转范围(roll, pitch, yaw) 弧度
+- rotation.upper = [0.1, 0.43, 0.1]          # 平均pitch ≈ 0.40rad ≈ 23° 向下
+- resized_resolution = [48, 64]                # 缩放后分辨率
+- output_resolution = [48, 64]                 # 网络输入分辨率
+- horizontal_fov = [86, 90]                    # 水平视场角 度
+- crop_top_bottom = [12, 0]                    # 裁剪顶部12像素，底部0像素
+- crop_left_right = [7, 9]                     # 裁剪左边7像素，右边9像素
+- near_plane = 0.05                            # 最近观测深度 m
+- depth_range = [0.0, 3.0]                     # 深度范围 m
+- latency_range = [0.08, 0.142]               # 传输延迟范围 s
+- latency_resampling_time = 5.0                # 重新采样延迟间隔 s
+- refresh_duration = 1/10 = 0.1s              # 相机刷新率 10Hz
+```
+
+### 2.2 视觉编码器参数
+```
+policy:
+- encoder_component_names = ["forward_depth"]  # 编码器处理深度图组件
+- encoder_class_name = "Conv2dHeadModel"       # 使用卷积编码头模型
+- encoder_kwargs:
+  channels = [16, 32, 32]                      # 各层输出通道数
+  kernel_sizes = [5, 4, 3]                     # 卷积核尺寸
+  strides = [2, 2, 1]                          # 卷积步长
+  hidden_sizes = [128]                         # 最后全连接层隐藏维度
+  use_maxpool = True                           # 每层后使用最大池化
+  nonlinearity = "LeakyReLU"                    # 激活函数
+- encoder_output_size = 32                      # 输出编码维度
+```
+
+=============================================================================
+
+## 三、完整处理流程
+
+=============================================================================
+
+### 步骤 1: 原始深度图像采集
+
+**调用位置**: 环境初始化 `LeggedRobotNoisy.__init__()`
+
+**涉及函数**: 无，Isaac Gym内部完成
+
+**输出**: `self.sensor_tensor_dict["forward_depth"]` = 列表[num_envs] × (H, W)
+
+**分辨率**: 120 × 160 (H × W)
+
+**说明**:
+- Isaac Gym 物理渲染引擎从相机视角渲染场景
+- 深度值符号为负（符合Isaac Gym约定）
+- 每个环境一个深度图
+
+=============================================================================
+
+### 步骤 2: 深度图像预处理
+
+**调用位置**: `_get_forward_depth_obs()` → `_process_depth_image()`
+
+**函数名称**: `_process_depth_image(self, depth_images)`
+
+**输入**: `depth_images` = List[num_envs] × (H, W)
+
+**完整处理流程**:
+
+```
+1. 堆叠并翻转符号
+   depth_images_ = torch.stack(depth_images).unsqueeze(1) * -1
+   原因: Isaac Gym输出负深度，需要转为正深度
+
+2. 添加模拟噪声（go2_distill_config.py 中 add_noise = False，此步骤跳过）
+   （训练时如果开启add_noise，会调用以下函数，实际distill训练不执行）
+   a) _add_depth_contour() - 添加轮廓增强
+   b) _add_depth_artifacts() - 添加随机伪影
+   c) _add_depth_stereo() - 添加立体相机远近噪声
+   d) _add_sky_artifacts() - 添加天空伪影
+
+3. 归一化: 调用 _normalize_depth_images()
+   depth_clipped = torch.clip(depth_images, depth_min, depth_max)
+   depth_normalized = (depth_clipped - depth_min) / (depth_max - depth_min)
+   输出范围: [0, 1]
+
+4. 裁剪: 调用 _crop_depth_images()
+   输入: (..., 120, 160)
+   裁剪: depth_images[..., 12:120, 7:151]
+   输出: (..., 108, 144)
+
+5. 缩放: 如果配置了resized_resolution，使用双三次插值
+   depth_images = forward_depth_resize_transform(depth_images)
+   输出分辨率: 48 × 64
+
+6. 裁剪到[0, 1]范围
+   depth_images = depth_images.clip(0, 1)
+
+7. 返回: shape (1, num_envs, 1, 48, 64)
+```
+
+**涉及子函数** (go2_distill.py实际运行):
+| 函数名 | 功能 | 是否实际调用 |
+|--------|------|-------------|
+| `_crop_depth_images` | 按配置裁剪图像 | ✅ 是 |
+| `_normalize_depth_images` | 归一化到[0,1] | ✅ 是 |
+| `_add_depth_contour` | 添加轮廓增强，边缘置零 | ❌ 否 (add_noise=False) |
+| `_add_depth_artifacts` | 添加随机方块伪影 | ❌ 否 (add_noise=False) |
+| `form_artifacts` | 使用空间转换器生成伪影mask | ❌ 否 (add_noise=False) |
+| `_add_depth_stereo` | 模拟立体相机远近噪声 | ❌ 否 (add_noise=False) |
+| `_recognize_top_down_too_close` | 检测整列过近阻塞 | ❌ 否 (add_noise=False) |
+| `_add_sky_artifacts` | 添加天空远距离伪影 | ❌ 否 (add_noise=False) |
+
+=============================================================================
+
+### 步骤 3: 延迟缓冲与采样
+
+**调用位置**: `_get_forward_depth_obs()`
+
+**函数名称**: `_get_forward_depth_obs(self, privileged=False)`
+
+**流程**:
+
+```
+if not forward_depth_obs_refreshed:
+
+  1. 将新处理好的帧推入环形缓冲区
+     forward_depth_obs_buffer = concat([buffer[1:], processed_frame], dim=0)
+
+  2. 检查是否需要重新采样延迟
+     delay_refresh_mask = (episode_length_buf % int(refresh_duration / dt)) == 0
+     如果需要，重新采样每个环境的延迟帧数
+
+  3. 更新延迟计数
+     forward_camera_delayed_frames = clip(delayed_frames + 1, 0, buffer_len)
+
+  4. 从缓冲区取出对应延迟帧
+     forward_depth_output = forward_depth_obs_buffer[-delayed_frames, arange(num_envs)]
+
+  5. 标记已刷新
+     forward_depth_obs_refreshed = True
+
+输出: forward_depth_output shape = (num_envs, 1, 48, 64)
+```
+
+**涉及类成员变量**:
+| 变量名 | 作用 |
+|--------|------|
+| `forward_depth_obs_buffer` | 深度帧环形缓冲区 |
+| `forward_camera_latency_buffer` | 每个环境采样的延迟（秒） |
+| `forward_camera_delayed_frames` | 每个环境延迟帧数计数 |
+| `forward_depth_output` | 当前步使用的深度图输出 |
+
+=============================================================================
+
+### 步骤 4: 拼接到观测向量
+
+**调用位置**: `compute_observations()` → `_get_forward_depth_obs()`
+
+**函数名称**: `_get_forward_depth_obs(self, privileged=False)`
+
+**流程**:
+
+```
+1. 如果需要，扁平化输出
+   depth_flattened = forward_depth_output.flatten(start_dim=1)
+
+2. 形状变化: (num_envs, 1, 48, 64) → (num_envs, 1×48×64) = (num_envs, 3072)
+
+3. 拼接到完整观测向量
+   obs = cat([proprioception_obs, depth_flattened], dim=-1)
+
+输出obs形状: (num_envs, 48 + 3072) = (num_envs, 3120)
+```
+
+=============================================================================
+
+### 步骤 5: 视觉编码器提取特征
+
+**调用位置**: 策略网络前向 `EncoderStateAcRecurrent.forward()`
+
+**模型类**: `Conv2dHeadModel`
+
+**网络结构**:
+
+```
+输入: (batch, 1, 48, 64)
+
+层1: Conv2d(1→16, kernel=5, stride=2) → LeakyReLU → MaxPool
+      输出尺寸: [(48-5)/2 + 1 = 22,  (64-5)/2 + 1 = 30] → 22 × 30 × 16
+
+层2: Conv2d(16→32, kernel=4, stride=2) → LeakyReLU → MaxPool
+      输出尺寸: [(22-4)/2 + 1 = 10,  (30-4)/2 + 1 = 14] → 10 × 14 × 32
+
+层3: Conv2d(32→32, kernel=3, stride=1) → LeakyReLU → MaxPool
+      输出尺寸: [(10-3)/1 + 1 = 8,  (14-3)/1 + 1 = 12] → 8 × 12 × 32
+
+Flatten: 8 × 12 × 32 = 3072 → FC(3072→128) → LeakyReLU
+
+输出: FC(128→32) → 编码维度 32
+
+最终输出 shape: (batch, 32)
+```
+
+**配置参数回顾**:
+- channels: [16, 32, 32]
+- kernel_sizes: [5, 4, 3]
+- strides: [2, 2, 1]
+- use_maxpool = True
+- 最终输出: 32维深度特征嵌入
+
+=============================================================================
+
+### 步骤 6: 策略网络输出动作
+
+**调用位置**: 策略网络前向
+
+**流程**:
+
+```
+1. 本体传感输入 (proprioception): 48维
+   - lin_vel: 3
+   - ang_vel: 3
+   - projected_gravity: 3
+   - commands: 3
+   - dof_pos: 12
+   - dof_vel: 12
+   - last_actions: 12
+   总计: 3+3+3+3+12+12+12 = 48
+
+2. 拼接: 输入 = [本体传感(48维) + 深度编码(32维)] → 总计 80维
+
+3. MLP多层感知机输出: 12维动作 (每个关节一个动作)
+
+4. 动作裁剪: clip(action, -clip_actions, clip_actions)
+
+5. PD控制: 目标关节位置 = 默认角度 + 动作 × 动作缩放系数
+   tau = kp × (目标位置 - 当前位置) + kd × (0 - 当前速度)
+
+6. 扭矩下发到执行器
+```
+
+=============================================================================
+
+## 四、输出尺寸变化总结
+
+=============================================================================
+
+| 阶段 | 尺寸 | 说明 |
+|------|------|------|
+| 原始采集 | (num_envs,) × (120, 160) | 每个环境一张深度图 |
+| 预处理后 | (1, num_envs, 1, 48, 64) | 推入缓冲区前 |
+| 延迟采样输出 | (num_envs, 1, 48, 64) | 当前步使用 |
+| 扁平化后 | (num_envs, 3072) | 拼接到观测 |
+| 编码器输出 | (num_envs, 32) | 特征嵌入 |
+| 最终策略输入 | (num_envs, 48 + 32) = (num_envs, 80) | MLP输入 |
+| 策略输出 | (num_envs, 12) | 关节动作 |
+
+=============================================================================
+
+## 五、真机部署流程 (RealSense + ROS2)
+
+=============================================================================
+
+**代码位置**: `onboard_codes/go2/go2_visual.py`
+
+**节点名称**: `VisualHandlerNode`
+
+**完整流程**:
+
+```
+1. 初始化RealSense管道
+   - 设置分辨率: 480 × 640
+   - 设置FPS: 30
+
+2. 等待深度帧: rs_pipeline.wait_for_frames()
+
+3. 获取深度数据:
+   depth_frame = rs_frame.get_depth_frame()
+   depth_image_np = np.asanyarray(depth_frame.get_data())  # uint16, 单位mm
+
+4. 旋转180°:
+   原因: D435i倒装在机器人头部，需要旋转修正方向
+   depth_image_np = np.rot90(depth_image_np, k=2)
+
+5. 裁剪:
+   depth_image_np = depth_image_np[crop_top:-crop_bottom-1, crop_left:-crop_right-1]
+
+6. 转Tensor:
+   depth_image_pyt = torch.from_numpy(depth_image_np.astype(np.float32)).unsqueeze(0).unsqueeze(0)
+
+7. 归一化:
+   depth_clip = torch.clip(depth_image_pyt, depth_min, depth_max)
+   depth_normalized = (depth_clip - depth_min) / (depth_max - depth_min)
+
+8. Resize: 自适应平均池化到 (48, 64)
+   depth_resized = resize2d(depth_normalized, output_resolution)
+
+9. 特征编码:
+   视觉编码器(TorchScript)前向 → 32维 embedding
+
+10. 发布:
+    - 发布原始深度图: /camera/forward_depth
+    - 发布编码后特征: /forward_depth_embedding (Float32MultiArray)
+
+11. 机器人主节点订阅:
+    - unitree_ros2_real.py 中 _forward_depth_embedding_callback()
+    - 更新缓冲区 forward_depth_embedding_buffer
+
+12. 控制循环:
+    - 拼接到观测 → 策略前向 → 输出动作 → 下发扭矩
+```
+
+**关键差异**:
+- 不添加模拟噪声（使用真实相机噪声）
+- 不模拟延迟（使用真实传输延迟）
+- 编码器独立运行，只输出编码特征，减少主节点计算
+
+=============================================================================
+
+## 六、MuJoCo部署流程
+
+=============================================================================
+
+**代码位置**: `deploy/deploy_mujoco/deploy_mujoco.py` → `MujocoSim2SimEvalJit`
+
+**完整流程**:
+
+```
+1. 初始化 (__init__):
+   - glfw.init()
+   - 创建离屏窗口: 160 × 120 (width × height)
+   - 创建MjvScene和MjrContext
+   - 设置离屏渲染
+   - 预分配RGB和深度缓冲区
+   - 设置固定相机: fixedcamid = camera_id from XML
+
+2. 每个控制步 (run() 主循环):
+   a. 策略输出动作 → PD计算扭矩 → mj_step
+
+   b. 如果相机可用:
+      i. mujoco.mjv_updateScene 从相机视角更新场景
+      ii. mujoco.mjr_render 离屏渲染
+      iii. mujoco.mjr_readPixels 读取RGB和深度到缓冲区
+      iv. 垂直翻转 (OpenGL Y轴方向与OpenCV相反)
+      v. BGR转换 → cv2.imshow显示RGB
+      vi. 深度归一化 → cv2.imshow显示深度灰度
+      vii. 后续预处理和编码同训练流程
+
+   c. OpenCV等待按键，ESC退出
+
+3. 退出清理:
+   - cv2.destroyAllWindows()
+   - glfw.destroy_window()
+   - glfw.terminate()
+```
+
+**相机参数来自XML**:
+- body pos: "0.24 -0.0175 0.12" (相对于基座)
+- body euler: "0 0.40 0" (pitch向下)
+- camera pos: "0 0 0" (相对于body)
+- camera euler: "0 -1.57 0" (朝前)
+- fovy: 66°
+
+=============================================================================
+
+## 七、关键函数列表 (go2_distill实际运行会调用)
+
+=============================================================================
+
+| 函数 | 文件 | 功能 | 是否实际调用 |
+|------|------|------|-------------|
+| `build_depth_image_processor_buffers` | legged_robot_noisy.py | 预处理卷积核初始化、Resize变换 | ✅ 是 |
+| `_process_depth_image` | legged_robot_noisy.py | 完整预处理流程 | ✅ 是 |
+| `_crop_depth_images` | legged_robot_noisy.py | 裁剪图像 | ✅ 是 |
+| `_normalize_depth_images` | legged_robot_noisy.py | 归一化到[0,1] | ✅ 是 |
+| `_get_forward_depth_obs` | legged_robot_noisy.py | 延迟缓冲处理，输出观测 | ✅ 是 |
+| `Conv2dHeadModel.forward` | 模型 | 卷积编码器前向 | ✅ 是 |
+| `EncoderStateAcRecurrent.forward` | 模型 | 策略网络完整前向 | ✅ 是 |
+| `_add_depth_contour` | legged_robot_noisy.py | 添加轮廓增强 | ❌ 否 (add_noise=False) |
+| `_add_depth_artifacts` | legged_robot_noisy.py | 添加伪影噪声 | ❌ 否 (add_noise=False) |
+| `_add_depth_stereo` | legged_robot_noisy.py | 添加立体相机远近噪声 | ❌ 否 (add_noise=False) |
+| `_add_sky_artifacts` | legged_robot_noisy.py | 添加天空伪影 | ❌ 否 (add_noise=False) |
+| `get_depth_frame` | go2_visual.py (ROS) | 真机读取并预处理深度图 | ⚠️ 仅真机部署 |
+| `input_filter` | a1_visual_embedding.py | 真机预处理函数 | ⚠️ 仅真机部署 |
+
+=============================================================================
+
+## 八、训练vs部署差异总结
+
+=============================================================================
+
+| 项目 | 训练 (Isaac Gym) | 仿真部署 (MuJoCo) | 真机部署 (ROS2) |
+|------|-----------------|-------------------|-----------------|
+| 原始分辨率 | 120 × 160 | 160 × 120 | 480 × 640 |
+| 添加模拟噪声 | 是 | 否 | 否 |
+| 模拟传输延迟 | 是 | 否 | 真实硬件延迟 |
+| 深度归一化 | 是 | 是 | 是 |
+| 裁剪缩放 | 是 | 是 | 是 |
+| 延迟缓冲区 | 是 | 否 | 节点队列处理 |
+| 编码器位置 | 在策略网络内 | 在策略网络内 | 独立前置 |
+| 输出 | 3072维扁平化 | 32维编码+策略内编码 | 直接输出32维编码 |
+
+=============================================================================
+
+## 九、参考配置
+
+=============================================================================
+
+本文基于go2_distill_config.py配置整理，Ddog配置相同:
+
+```
+go2_distill_config.py: /root/mym/parkour-main/legged_gym/legged_gym/envs/go2/go2_distill_config.py
+ddog_distill_config.py: /root/mym/parkour-main/legged_gym/legged_gym/envs/ddog/ddog_distill_config.py
+legged_robot_noisy.py: /root/mym/parkour-main/legged_gym/legged_gym/envs/base/legged_robot_noisy.py
+go2_visual.py: /root/mym/parkour-main/onboard_codes/go2/go2_visual.py
+deploy_mujoco.py: /root/mym/parkour-main/deploy/deploy_mujoco/deploy_mujoco.py
+go2_deploy.xml: /root/mym/parkour-main/deploy/deploy_mujoco/mujoco_meshes/go2_deploy.xml
+```
+
+=============================================================================
+
+**配置检查 (go2_distill_config.py)**:
+- add_noise = False → 所有噪声添加函数都不执行
+- 只列出实际运行会调用的函数
+
+**生成时间**: 2026-03-31
+**文档版本**: 1.1
