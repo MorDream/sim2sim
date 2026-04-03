@@ -33,7 +33,7 @@ except Exception:
 
 CURRENT_FILE = Path(__file__).resolve()
 LEGGED_GYM_ROOT_DIR = CURRENT_FILE.parents[2]
-DEFAULT_CONFIG_PATH = LEGGED_GYM_ROOT_DIR / "deploy" / "deploy_mujoco" / "configs" / "g2.yaml"
+DEFAULT_CONFIG_PATH = LEGGED_GYM_ROOT_DIR / "deploy" / "deploy_mujoco" / "configs" 
 
 GO2_OBS_COMPONENTS = [
     "lin_vel",
@@ -308,7 +308,7 @@ class MujocoSim2SimEvalJit:
         self.xml_path = resolve_config_path(self.cfg["xml_path"], self.config_dir)
         self.simulation_duration = float(
             simulation_duration if simulation_duration is not None else self.cfg.get("simulation_duration", 60.0)
-        )
+        ) 
 
         self.simulation_dt = float(self.cfg.get("simulation_dt", 0.005))
         self.control_decimation = int(self.cfg.get("control_decimation", 4))
@@ -798,7 +798,7 @@ class MujocoSim2SimEvalJit:
 
 def parse_args():
     parser = argparse.ArgumentParser(description="MuJoCo sim2sim JIT deployment evaluator for Go2.")
-    parser.add_argument("--config", type=str, default=str(DEFAULT_CONFIG_PATH), help="YAML config path.")
+    parser.add_argument("--config", type=str, default=str(DEFAULT_CONFIG_PATH)+"g2.yaml", help="YAML config path.")
     parser.add_argument("--policy-path", type=str, default=None, help="Override policy_path from YAML.")
     parser.add_argument("--xml-path", type=str, default=None, help="Override xml_path from YAML.")
     parser.add_argument("--duration", type=float, default=None, help="Override simulation_duration from YAML.")
@@ -812,7 +812,7 @@ def parse_args():
 def main():
     args = parse_args()
     evaluator = MujocoSim2SimEvalJit(
-        config_path=Path(args.config),
+        config_path=Path(os.path.join(DEFAULT_CONFIG_PATH, Path(args.config))),
         policy_path=Path(args.policy_path).resolve() if args.policy_path else None,
         xml_path=Path(args.xml_path).resolve() if args.xml_path else None,
         simulation_duration=args.duration,
