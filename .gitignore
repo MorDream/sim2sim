@@ -61,6 +61,7 @@ __pycache__*.pt
 !deploy/deploy_mujoco/exported/go2_rough_policy.pt
 !deploy/deploy_mujoco/exported/go2_field_policy.pt
 !deploy/deploy_mujoco/exported/policy_gru_1.pt
+!deploy/deploy_mujoco/exported/ddog_field_policy.pt
 # !legged_gym/logs/field_go2/Mar18_04-10-13_Go2_11skills/model_75000.pt
 # !legged_gym/logs/field_go2/3.12步态很奇怪，完全不过关/model_41000.pt
 # !legged_gym/logs/field_go2/其它项目是目前最好的，但是在坑面前不动/model_58000.pt
