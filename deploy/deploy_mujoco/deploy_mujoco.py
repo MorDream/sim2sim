@@ -13,6 +13,7 @@ import torch
 import yaml
 import glfw
 import cv2
+import os
 
 try:
     import imageio.v2 as imageio
@@ -304,7 +305,7 @@ class MujocoSim2SimEvalJit:
 
         self.policy_path = policy_path or resolve_config_path(self.cfg["policy_path"], self.config_dir)
         print(f"[Info] Using policy from: {self.policy_path}")
-        self.xml_path = xml_path or resolve_config_path(self.cfg["xml_path"], self.config_dir)
+        self.xml_path = resolve_config_path(self.cfg["xml_path"], self.config_dir)
         self.simulation_duration = float(
             simulation_duration if simulation_duration is not None else self.cfg.get("simulation_duration", 60.0)
         )
