@@ -7,7 +7,7 @@ from legged_gym.envs.ddog.ddog_config import DdogRoughCfg, DdogRoughCfgPPO
 
 class Ddog2Cfg( DdogRoughCfg ):
     class init_state( DdogRoughCfg.init_state ):
-        pos = [0.0, 0.0, 0.7]
+        pos = [0.0, 0.0, 0.5]
         zero_actions = False
 
     class sensor( DdogRoughCfg.sensor):
@@ -166,21 +166,26 @@ class Ddog2Cfg( DdogRoughCfg ):
         class scales:
             tracking_lin_vel = 1.
             tracking_ang_vel = 1.
-            energy_substeps = -2e-7
+            energy_substeps = -2e-5
             torques = -1e-7
-            stand_still = -1.
+            stand_still = -5.
             dof_error_named = -1.
             dof_error = -0.005
             collision = -0.05
             lazy_stop = -3.
-            # penalty for hardware safety
             exceed_dof_pos_limits = -0.1
             exceed_torque_limits_l1norm = -0.1
-            # penetration penalty
             penetrate_depth = -0.05
+            
+            #===================add=========================
+            ang_vel_xy = -0.1 
+            feet_air_time = -2.0
+            feet_air_time_var = -8.0
+            foot_mirror = -0.05
+            has_contact = 1.0
 
     class noise( DdogRoughCfg.noise ):
-        add_noise = False
+        add_noise = True
 
     class curriculum:
         penetrate_depth_threshold_harder = 100
@@ -196,13 +201,13 @@ class Ddog2CfgPPO( DdogRoughCfgPPO ):
         experiment_name = "Ddog2"
 
         resume = True
-        load_run = osp.join(logs_root, "rough_ddog",
-            "Mar29_23-15-51_DdogRough",
+        load_run = osp.join(logs_root, "Ddog2",
+            "Apr03_01-18-13_Ddog2",
         )
 
         run_name = "".join(["Ddog2"])
 
         max_iterations = 30000
-        save_interval = 1000
-        log_interval = 10
+        save_interval = 100
+        log_interval = 50
         

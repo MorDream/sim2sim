@@ -56,4 +56,9 @@ runs
 
 # other
 *.egg-info
-__pycache__
+__pycache__*.pt
+*.pt
+!parkour/legged_gym/logs/Ddog2/Apr03_01-18-13_Ddog2
+!parkour/legged_gym/logs/Ddog2/Apr03_07-59-21_Ddog2/model_73000.pt
+!parkour/legged_gym/logs/Ddog2/exported/policies
+!parkour/legged_gym/logs/Ddog2/exported/policies/policy_gru_0330.pt

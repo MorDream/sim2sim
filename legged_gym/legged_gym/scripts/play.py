@@ -130,6 +130,14 @@ def play(args):
     env_cfg.viewer.draw_height_measurements = False
     env_cfg.viewer.draw_volume_sample_points = False
     env_cfg.viewer.draw_sensors = False
+    
+    #=======================add=======================
+    # override some parameters for testing
+    if env_cfg.terrain.selected == "BarrierTrack":
+        env_cfg.env.num_envs = min(env_cfg.env.num_envs, 1)
+    # env_cfg.commands.is_goal_based = False   # ← 加这一行，play 时手动控制指令
+    #=======================add=======================
+    
     if hasattr(env_cfg.terrain, "BarrierTrack_kwargs"):
         env_cfg.terrain.BarrierTrack_kwargs["draw_virtual_terrain"] = True
     train_cfg.runner.resume = (args.load_run is not None)
@@ -490,7 +498,7 @@ def play(args):
             start_time = time.time_ns()
 
 if __name__ == '__main__':
-    EXPORT_POLICY = False
+    EXPORT_POLICY = True
     args = get_args([
         dict(name= "--slow", type= float, default= 0., help= "slow down the simulation by sleep secs (float) every frame"),
         dict(name= "--show_teacher", action= "store_true", default= False, help= "show teacher actions"),

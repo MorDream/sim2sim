@@ -173,35 +173,35 @@ class DdogRoughCfg( LeggedRobotCfg ):
 
     class rewards( LeggedRobotCfg.rewards ):
         class scales:
-            action_rate = -0.01
-            action_smoothness = -0.01
-            ang_vel_xy = -0.1 
-            # base_height = -10.0
-            # collision = -1.0
-            # dof_acc = -2.5e-7
-            feet_air_time = -2.0
-            feet_air_time_var = -8.0
-            # feet_contact_forces = -0.00015
-            # foot_clearance = -0.5
-            foot_mirror = -0.05
-            # foot_slide = -0.05
-            has_contact = 1.0
-            # hip_pos = -5.0
-            # lin_vel_z = -4.0
-            # orientation = -0.2
-            # powers = -2e-5
-            stand_still = -2.0
-            # stumble = -0.05
-            tracking_ang_vel = 1.0
-            tracking_lin_vel = 2.0
+            action_rate = -0.01                # 惩罚动作变化率，抑制动作突变
+            action_smoothness = -0.01          # 惩罚动作平滑度，鼓励平滑运动
+            ang_vel_xy = -0.1                  # 惩罚base在xy方向的角速度，抑制不必要的摇晃
+            # base_height = -1e-3             # 惩罚base高度偏离目标值
+            # collision = -1.0                # 惩罚身体部位碰撞地面
+            dof_acc = -2.5e-7               # 惩罚关节加速度过大
+            feet_air_time = -2.0               # 惩罚脚离地时间偏离目标值
+            feet_air_time_var = -8.0           # 惩罚双脚离地时间方差，鼓励步态对称性
+            # feet_contact_forces = -0.00015  # 惩罚脚接触力过大
+            # foot_clearance = -0.5           # 惩罚脚离地高度不达标
+            foot_mirror = -0.05                # 惩罚左右脚位置不对称，鼓励镜像步态
+            foot_slide = -0.1              # 惩罚脚滑动
+            has_contact = 1.0                  # 奖励脚接触地面，鼓励支撑
+            hip_pos = -1.0                     # 惩罚髋关节偏离默认位置，鼓励保持原位
+            lin_vel_z = -1.0                # 惩罚base在z方向速度，抑制上下弹跳
+            # orientation = -0.2              # 惩罚base不水平，鼓励保持水平姿态
+            powers = -2e-5                     # 惩罚功率/能量消耗，鼓励节能
+            stand_still = -5.0                 # 惩罚零指令下的运动，鼓励静止
+            # stumble = -0.05                 # 惩罚绊倒/失稳
+            tracking_ang_vel = 1.0            # 奖励跟踪角速度指令误差越小越好
+            tracking_lin_vel = 2.0            # 奖励跟踪线速度指令误差越小越好
 
-            exceed_dof_pos_limits = -0.4
-            exceed_torque_limits_l1norm = -0.4
-            dof_vel_limits = -0.4
+            exceed_dof_pos_limits = -0.4       # 惩罚关节位置超出软限制
+            exceed_torque_limits_l1norm = -0.4 # L1范数惩罚扭矩超出限制
+            dof_vel_limits = -0.4              # 惩罚关节速度超出限制
 
-            energy_substeps = -2e-5
-            dof_error_named = -1.
-            dof_error = -0.01
+            energy_substeps = -2e-5            # 惩罚子步骤能量消耗，多步积分版本
+            dof_error_named = -1.              # 惩罚特定关节位置误差（加权更大）
+            dof_error = -0.01                  # 惩罚所有关节位置误差
             
         dof_error_names = ["FL_hip_joint", "FR_hip_joint", "RL_hip_joint", "RR_hip_joint"]
         only_positive_rewards = False
@@ -211,7 +211,7 @@ class DdogRoughCfg( LeggedRobotCfg ):
 
         feet_air_time_target = 0.30
         clearance_height_target = -0.18
-        base_height_target = 0.30
+        base_height_target = 0.32
 
     class normalization( LeggedRobotCfg.normalization ):
         class obs_scales( LeggedRobotCfg.normalization.obs_scales ):
@@ -220,7 +220,7 @@ class DdogRoughCfg( LeggedRobotCfg ):
         clip_actions_method = None # let the policy learns not to exceed the limits
 
     class noise( LeggedRobotCfg.noise ):
-        add_noise = False
+        add_noise = True
 
     class viewer( LeggedRobotCfg.viewer ):
         pos = [-1., -1., 0.4]
@@ -293,8 +293,8 @@ class DdogRoughCfgPPO( LeggedRobotCfgPPO ):
         algorithm_class_name = "EstimatorPPO"
         experiment_name = "rough_ddog"
         
-        resume = False
-        load_run = None
+        resume = True
+        load_run = "/root/mym/pk_zrg/parkour/legged_gym/logs/rough_ddog/first"
 
         run_name = "".join(["DdogRough"])
            

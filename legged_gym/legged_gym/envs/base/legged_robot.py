@@ -999,6 +999,7 @@ class LeggedRobot(BaseTask):
         self.projected_gravity = quat_rotate_inverse(self.base_quat, self.gravity_vec)
         
         # add
+        self.cfg.env.history_len = 10
         self.action_history_buf = torch.zeros(self.num_envs, self.cfg.env.history_len, self.num_dof, device=self.device, dtype=torch.float)
         
         if self.cfg.terrain.measure_heights:
@@ -1750,6 +1751,7 @@ class LeggedRobot(BaseTask):
         # Penalize base height away from target
         base_height = torch.mean(self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1)
         return torch.square(base_height - self.cfg.rewards.base_height_target)
+    
     
     def _reward_torques(self):
         # Penalize torques

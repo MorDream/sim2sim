@@ -193,8 +193,18 @@ def get_args(custom_args=[]):
 
 def export_policy_as_jit(actor_critic, path):
     if hasattr(actor_critic, 'memory_a'):
-        # assumes LSTM: TODO add GRU
-        exporter = PolicyExporterLSTM(actor_critic)
+        rnn_module = actor_critic.memory_a.rnn
+        
+        # 自动判断类型
+        if isinstance(rnn_module, torch.nn.LSTM):
+            print("检测到 LSTM 模型，正在导出...")
+            exporter = PolicyExporterLSTM(actor_critic)
+        elif isinstance(rnn_module, torch.nn.GRU):
+            print("检测到 GRU 模型，正在导出...")
+            exporter = PolicyExporterGRU(actor_critic)
+        else:
+            raise TypeError(f"不支持的 RNN 类型: {type(rnn_module)}。仅支持 LSTM 或 GRU。")
+            
         exporter.export(path)
     else: 
         os.makedirs(path, exist_ok=True)
@@ -229,8 +239,177 @@ class PolicyExporterLSTM(torch.nn.Module):
         os.makedirs(path, exist_ok=True)
         path = os.path.join(path, 'policy_lstm_1.pt')
         self.to('cpu')
+        # 在 traced_script_module = torch.jit.script(self) 之前添加：
         traced_script_module = torch.jit.script(self)
         traced_script_module.save(path)
+
+
+class PolicyExporterGRU(torch.nn.Module):
+    def __init__(self, actor_critic):
+        super().__init__()
+        self.actor = copy.deepcopy(actor_critic.actor)
+        self.is_recurrent = actor_critic.is_recurrent
+        self.memory = copy.deepcopy(actor_critic.memory_a.rnn)
+        self.use_state_estimator = hasattr(actor_critic, "state_estimator") #先判断是否使用线速度估计
+        self.use_estimator_memory = hasattr(actor_critic, "memory_s") #先判断是否使用估计器记忆
+        if self.use_state_estimator:
+            self.state_estimator = copy.deepcopy(actor_critic.state_estimator)
+        else:
+            self.state_estimator = torch.nn.Identity()
+        if self.use_estimator_memory:
+            self.estimator_memory = copy.deepcopy(actor_critic.memory_s.rnn)
+        else:
+            self.estimator_memory = torch.nn.Identity()
+        
+        if hasattr(actor_critic, 'encoders'):
+            self.encoders = copy.deepcopy(actor_critic.encoders)
+            self.encoders.cpu()
+        else:
+            self.encoders = None
+
+        self.actor.cpu()
+        self.memory.cpu()
+        self.state_estimator.cpu()
+        self.estimator_memory.cpu()
+
+        # --- 新增：彻底清洗所有子模块中的 NumPy 类型 ---
+        for module in self.modules():
+            # 修复 Linear 层
+            if isinstance(module, torch.nn.Linear):
+                module.in_features = int(module.in_features)
+                module.out_features = int(module.out_features)
+            # 修复 RNN 层 (GRU/LSTM)
+            if isinstance(module, (torch.nn.GRU, torch.nn.LSTM)):
+                module.input_size = int(module.input_size)
+                module.hidden_size = int(module.hidden_size)
+                module.num_layers = int(module.num_layers)
+            # 修复部分模块中可能残留的 numpy.int64 属性，避免 TorchScript 报错
+            if hasattr(module, "_output_size"):
+                output_size = getattr(module, "_output_size")
+                if isinstance(output_size, np.generic):
+                    setattr(module, "_output_size", int(output_size))
+
+        # 注册 buffer
+        self.register_buffer('hidden_state', torch.zeros(self.memory.num_layers, 1, self.memory.hidden_size))
+        if self.use_estimator_memory:
+            self.register_buffer('estimator_hidden_state', torch.zeros(self.estimator_memory.num_layers, 1, self.estimator_memory.hidden_size))
+        else:
+            self.register_buffer('estimator_hidden_state', torch.zeros(1, 1, 1))
+
+        # 导出时确认是否走线速度估计分支（训练里 replace lin_vel 时应有 state_estimator + memory_s）
+        print("[PolicyExporterGRU] lin_vel path:")
+        print(f"  use_state_estimator (hasattr actor_critic.state_estimator) = {self.use_state_estimator}")
+        print(f"  state_estimator module = {type(self.state_estimator).__name__}")
+        if self.use_state_estimator:
+            print("  -> forward 会用 45 维 obs 估计 lin_vel 并替换 obs_direct[:, :3]")
+        else:
+            print("  -> forward 不会估计线速度（Identity），obs 里 lin_vel 原样进 GRU")
+        print(f"  use_estimator_memory (hasattr actor_critic.memory_s) = {self.use_estimator_memory}")
+        print(f"  estimator_memory module = {type(self.estimator_memory).__name__}")
+        if self.use_estimator_memory:
+            print("  -> 估计器侧带 RNN 隐藏状态 estimator_hidden_state")
+        else:
+            print("  -> 估计器侧无 RNN（Identity），仅 MLP 直接映射 45 维 -> 3 维（若上面不是 Identity）")
+
+    def forward(self, x):
+        # x 的输入维度是 279
+        # 1. 切片：前 48 维直接使用，后 231 维进入 encoder
+        obs_direct = x[:, :48]       # 形状: [batch, 48]
+        obs_to_encode = x[:, 48:]    # 形状: [batch, 231]
+
+        # 训练时 lin_vel 由 estimator 预测，输入是 45 维非 lin_vel 观测。
+        if self.use_state_estimator:
+            estimator_obs = obs_direct[:, 3:48]  # 45 dims
+            if self.use_estimator_memory:
+                #GRU层进行处理，结合45维观测和之前的记忆，得到特征
+                estimator_feat, estimator_h = self.estimator_memory(estimator_obs.unsqueeze(0), self.estimator_hidden_state)
+                self.estimator_hidden_state[:] = estimator_h #更新记忆
+                estimated_lin_vel = self.state_estimator(estimator_feat.squeeze(0))
+            else:
+                estimated_lin_vel = self.state_estimator(estimator_obs)
+            obs_direct = obs_direct.clone()
+            obs_direct[:, :3] = estimated_lin_vel
+
+        # 2. 编码过程
+        if self.encoders is not None:
+            encoded_part = obs_to_encode
+            for encoder in self.encoders:
+                encoded_part = encoder(encoded_part)
+            # 编码后的 encoded_part 应该是 32 维
+        else:
+            encoded_part = obs_to_encode # 降级处理
+
+        # 3. 拼接：将直接观测 (48) 和 编码特征 (32) 拼接成 80 维
+        # dim=-1 确保在特征维度拼接
+        x_combined = torch.cat([obs_direct, encoded_part], dim=-1)
+
+        # 4. 经过 GRU (需要增加序列维度)
+        out, h = self.memory(x_combined.unsqueeze(0), self.hidden_state)
+        self.hidden_state[:] = h
+        
+        # 5. 经过 Actor MLP
+        return self.actor(out.squeeze(0))
+
+    @torch.jit.export
+    def reset_memory(self):
+        """用于在 JIT 部署环境中重置机器人记忆"""
+        self.hidden_state[:] = 0.
+        if self.use_estimator_memory:
+            self.estimator_hidden_state[:] = 0.
+
+    def _infer_obs_dim_for_self_check(self):
+        """Infer obs dim for a quick exporter sanity check."""
+        if self.encoders is None or len(self.encoders) == 0:
+            return None
+        first_encoder = self.encoders[0]
+        model = getattr(first_encoder, "model", None)
+        if model is None or len(model) == 0:
+            return None
+        first_layer = model[0]
+        if not isinstance(first_layer, torch.nn.Linear):
+            return None
+        # Current exporter assumes 48 direct obs + encoded raw obs.
+        return 48 + int(first_layer.in_features)
+
+    def _run_export_sanity_check(self):
+        """Print estimator output shape and replaced lin_vel once."""
+        obs_dim = self._infer_obs_dim_for_self_check()
+        if obs_dim is None:
+            print("[PolicyExporterGRU self-check] skipped (cannot infer obs_dim).")
+            return
+
+        x = torch.zeros((1, obs_dim), dtype=torch.float32)
+        with torch.no_grad():
+            obs_direct = x[:, :48].clone()
+            if self.use_state_estimator:
+                estimator_obs = obs_direct[:, 3:48]
+                if self.use_estimator_memory:
+                    feat, est_h = self.estimator_memory(estimator_obs.unsqueeze(0), self.estimator_hidden_state)
+                    estimated_lin_vel = self.state_estimator(feat.squeeze(0))
+                    # Do not keep check-time memory state.
+                    self.estimator_hidden_state[:] = 0.
+                else:
+                    estimated_lin_vel = self.state_estimator(estimator_obs)
+                obs_direct[:, :3] = estimated_lin_vel
+                print(
+                    "[PolicyExporterGRU self-check] "
+                    f"estimator_out_shape={tuple(estimated_lin_vel.shape)}, "
+                    f"replaced_obs_0_3={obs_direct[0, :3].tolist()}"
+                )
+            else:
+                print("[PolicyExporterGRU self-check] skipped (no state_estimator).")
+
+    def export(self, path):
+        os.makedirs(path, exist_ok=True)
+        path = os.path.join(path, 'policy_gru_0330.pt')
+        self.to('cpu')
+        self._run_export_sanity_check()
+        self.reset_memory()
+        
+        # 导出为 TorchScript 模块
+        traced_script_module = torch.jit.script(self)
+        traced_script_module.save(path)
+        print(f"成功导出 GRU 策略模型至: {path}")
 
 def merge_dict(this: dict, other: dict):
     """ Merging two dicts. if a key exists in both dict, the other's value will take priority
