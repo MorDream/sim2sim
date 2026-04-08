@@ -1,6 +1,7 @@
 #
 policy_path: "../exported/go2_field_policy.pt"
 xml_path: "scene.xml"
+base_body_name: "base"
 
 # Total simulation time
 simulation_duration: 60.0

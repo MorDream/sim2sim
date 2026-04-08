@@ -226,7 +226,7 @@
         <geom name="slope_down_new" type="box" size="0.55 0.75 0.02" pos="3.70 -10 0.3" euler="0 0.52 0" material="groundplane" contype="1" conaffinity="15"/>
 
 
-        <body name="base_link" pos="0 0 0.35">
+        <body name="base_link" pos="5 0 0.35">
             <inertial pos="0.000055 0.001439 0.005245" mass="6.7" diaginertia="0.03265071  0.052731396  0.073843864"/>
             <joint name="floating_base_joint" type="free"/>
             <geom type="mesh" mesh="base_link" contype='1' conaffinity='1'/>

@@ -1,5 +1,5 @@
 #
-policy_path: "../exported/ddog_field_policy.pt"
+policy_path: "../exported/policy_gru_0330.pt"
 xml_path: "../mujoco_meshes/ddog/Ddog.xml"
 base_body_name: "base_link"
 mujoco_joint_names: [
